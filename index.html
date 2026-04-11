@@ -5,6 +5,7 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Mon Coach Personnel</title>
   <meta name="theme-color" content="#0f0c29" />
+  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Mon Coach" />
@@ -715,23 +716,27 @@ function App() {
           .eq("id", "main")
           .single();
 
+        const defaults = JSON.parse(JSON.stringify(HISTORICAL_DATA));
         if (error || !rows) {
           // First time: push historical data
-          const init = JSON.parse(JSON.stringify(HISTORICAL_DATA));
           await supabase.from("coach_data").upsert({
             id: "main",
-            procrastination: init.procrastination,
-            anglais: init.anglais,
-            poids: init.poids,
-            chat_history: init.chatHistory,
+            procrastination: defaults.procrastination,
+            anglais: defaults.anglais,
+            poids: defaults.poids,
+            chat_history: defaults.chatHistory,
             updated_at: new Date().toISOString(),
           });
-          setData(init);
+          setData(defaults);
         } else {
+          // Merge with defaults to ensure all keys exist
+          const p = rows.procrastination || {};
+          const a = rows.anglais || {};
+          const w = rows.poids || {};
           setData({
-            procrastination: rows.procrastination,
-            anglais: rows.anglais,
-            poids: rows.poids,
+            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras },
+            anglais: { ...defaults.anglais, ...a, sessions: a.sessions || defaults.anglais.sessions, vocab: a.vocab || defaults.anglais.vocab, monthlyGoals: a.monthlyGoals || defaults.anglais.monthlyGoals, proSentences: a.proSentences || defaults.anglais.proSentences },
+            poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries },
             chatHistory: rows.chat_history || [],
           });
         }
