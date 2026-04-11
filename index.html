@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <title>Mon Coach Personnel</title>
+  <meta name="theme-color" content="#0f0c29" />
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Mon Coach" />
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+    html, body { height: 100%; background: #0f0c29; }
+    body { overflow-x: hidden; }
+    input[type=range] { -webkit-appearance: none; height: 4px; border-radius: 4px; background: #ffffff22; outline: none; }
+    input[type=range]::-webkit-slider-thumb { -webkit-appearance: none; width: 18px; height: 18px; border-radius: 50%; cursor: pointer; }
+    ::-webkit-scrollbar { width: 4px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: #ffffff22; border-radius: 4px; }
+    select option { background: #1e293b; color: #e2e8f0; }
+    .sync-dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+    .sync-dot.ok { background: #22c55e; }
+    .sync-dot.syncing { background: #f97316; animation: pulse 1s infinite; }
+    .sync-dot.error { background: #ef4444; }
+    @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  </style>
+</head>
+<body>
+<div id="root"></div>
+
+<script type="text/babel">
+const { useState, useEffect, useRef, useCallback } = React;
+
+// ── SUPABASE CONFIG ───────────────────────────────────────────────────────────
+const SUPABASE_URL = "https://gtdteuwthdcdsqmuhyoi.supabase.co";
+const SUPABASE_KEY = "sb_publishable_R3-Ed3HmbwU64CIwdPr09Q_vmV9DLeO";
+const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+
+// ── ANTHROPIC API KEY ─────────────────────────────────────────────────────────
+const API_KEY_STORAGE = "coach_api_key";
+function getApiKey() { try { return localStorage.getItem(API_KEY_STORAGE) || ""; } catch { return ""; } }
+function setApiKey(k) { try { localStorage.setItem(API_KEY_STORAGE, k); } catch {} }
+
+// ── HISTORICAL DATA (first load) ──────────────────────────────────────────────
+const HISTORICAL_DATA = {
+  procrastination: {
+    tasks: [
+      { id: 1, text: "Dossier acharnement thérapeutique — Récupérer le document", priority: "haute", done: false, created: "2025-11-14" },
+      { id: 2, text: "Signer les papiers (cimetière)", priority: "haute", done: false, created: "2025-11-14" },
+      { id: 3, text: "Reprendre le dossier Ingénieur", priority: "normale", done: false, created: "2025-11-14" },
+    ],
+    streak: 0, lastDate: null,
+    weeklyGoal: "Dossier acharnement thérapeutique",
+    weekBilan: "Je n'arrive pas à tenir le programme — Fixer 1 seule priorité par jour.",
+    mantras: [
+      "La constance bat la perfection.",
+      "Tu n'as pas besoin de plus de temps, tu as besoin de plus de direction.",
+      "Aujourd'hui, je prends les rênes de ma vie.",
+      "Les petites actions répétées chaque jour créent les grandes réussites.",
+      "La discipline est le pont entre les objectifs et la réussite.",
+    ],
+  },
+  anglais: {
+    sessions: [
+      { id: 10, type: "ecoute",       duration: 20, date: "2025-11-10", note: "Prise de parole en meeting" },
+      { id: 11, type: "lecture",      duration: 20, date: "2025-11-11", note: "" },
+      { id: 12, type: "conversation", duration: 15, date: "2025-11-12", note: "Prise de parole en meeting et call" },
+      { id: 13, type: "lecture",      duration: 20, date: "2025-11-13", note: "" },
+      { id: 14, type: "conversation", duration: 15, date: "2025-11-14", note: "Création de mots avec vocabulaire appris" },
+    ],
+    vocab: [
+      { id: 100, word: "gear up",           fr: "se préparer",           phrase: "Gear up for the new guidance",                          mastered: true,  date: "2025-11-01" },
+      { id: 101, word: "get in touch with", fr: "contacter",             phrase: "I will try to get in touch with the relevant team",     mastered: true,  date: "2025-11-01" },
+      { id: 102, word: "get rid of",        fr: "se débarrasser de",     phrase: "I got rid of her",                                      mastered: true,  date: "2025-11-02" },
+      { id: 103, word: "glimpse",           fr: "aperçu",                phrase: "Can you give us a glimpse of what you will talk about", mastered: true,  date: "2025-11-03" },
+      { id: 104, word: "grasp",             fr: "saisir / comprendre",   phrase: "Grasp your mouse and scroll down",                      mastered: true,  date: "2025-11-04" },
+      { id: 105, word: "grip",              fr: "prise / emprise",       phrase: "Get a good grip on it",                                 mastered: true,  date: "2025-11-05" },
+      { id: 106, word: "hold firm",         fr: "tenir bon",             phrase: "I am holding firm on this request.",                    mastered: true,  date: "2025-11-06" },
+      { id: 107, word: "hell-bent",         fr: "déterminé à tout prix", phrase: "I'm hell-bent on achieving this",                       mastered: false, date: "2025-11-07" },
+      { id: 108, word: "hang in there",     fr: "courage / tenir bon",   phrase: "Hang in there with this",                               mastered: false, date: "2025-11-08" },
+      { id: 109, word: "handover",          fr: "passation / transfert", phrase: "Was there an issue during the handover?",               mastered: false, date: "2025-11-09" },
+      { id: 110, word: "heed",              fr: "prêter attention",      phrase: "Heed where you walk",                                   mastered: false, date: "2025-11-10" },
+      { id: 111, word: "heighten",          fr: "intensifier",           phrase: "This heightens the suspense before I speak",            mastered: false, date: "2025-11-11" },
+      { id: 112, word: "high-end",          fr: "haut de gamme",         phrase: "This is a high-end presentation",                       mastered: false, date: "2025-11-12" },
+      { id: 113, word: "homegrown",         fr: "fait maison / local",   phrase: "It's a homegrown product",                              mastered: false, date: "2025-11-13" },
+      { id: 114, word: "indictment",        fr: "mise en examen",        phrase: "",                                                      mastered: false, date: "2025-11-14" },
+      { id: 115, word: "inscrutable",       fr: "impénétrable",          phrase: "",                                                      mastered: false, date: "2025-11-14" },
+    ],
+    streak: 5, lastDate: "2025-11-14",
+    monthlyGoals: [
+      { month: "Novembre", goal: "Améliorer la compréhension orale",      detail: "Mieux comprendre les accents lors des daily meetings" },
+      { month: "Décembre", goal: "Fluidifier l'expression en réunion",    detail: "Être capable de reformuler ou relancer naturellement" },
+      { month: "Janvier",  goal: "Enrichir le vocabulaire professionnel", detail: "Maîtriser les expressions clés du support IT" },
+      { month: "Février",  goal: "Gagner en confiance à l'oral",          detail: "Parler spontanément sans préparation" },
+    ],
+    proSentences: [
+      "Let's align on priorities for today.",
+      "I'll check with the middleware team and get back to you.",
+      "Can we close this incident, or is more analysis needed?",
+      "Please make sure the procedure is updated accordingly.",
+      "Thanks everyone, good job and have a nice day!",
+    ],
+  },
+  poids: {
+    entries: [
+      { id: 205, weight: 91.8, mood: 4, sleep: 7, energy: 4, note: "Pas de viande ce jour et pas de repas le soir. Se coucher plus tôt.", date: "2025-11-14" },
+      { id: 204, weight: 91.6, mood: 4, sleep: 7, energy: 4, note: "Pas de viande ce jour et pas de grignotage le soir.", date: "2025-11-13" },
+      { id: 203, weight: 91.8, mood: 4, sleep: 7, energy: 4, note: "Cours Aïkido bien cardio — passage 2ème Kiyu !", date: "2025-11-12" },
+      { id: 202, weight: 92.5, mood: 4, sleep: 7, energy: 3, note: "", date: "2025-11-08" },
+      { id: 201, weight: 93.0, mood: 3, sleep: 7, energy: 3, note: "Quelques douleurs", date: "2025-11-01" },
+    ],
+    streak: 6, lastDate: "2025-11-14",
+    objectif: 80,
+    weeklyGoal: "Descendre sous les 90 kg",
+    weekBilan: "J'ai trop mangé le soir — Stratégie : protéine + légumes, pas de féculents le soir.",
+    aikido: "2ème Kiyu en préparation 🥋",
+  },
+  chatHistory: [],
+};
+
+function today() { return new Date().toISOString().split("T")[0]; }
+
+const TABS = [
+  { id: "procrastination", label: "⚡ Focus",     color: "#f97316" },
+  { id: "anglais",         label: "🇬🇧 Anglais",  color: "#3b82f6" },
+  { id: "poids",           label: "🌿 Bien-être", color: "#22c55e" },
+];
+
+const inp = color => ({
+  flex: 1, padding: "10px 13px", background: "#ffffff0a",
+  border: `1px solid ${color}44`, borderRadius: 10,
+  color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif",
+  outline: "none", minWidth: 0, width: "100%",
+});
+const btn = color => ({
+  padding: "10px 18px", background: color, border: "none",
+  borderRadius: 10, color: "#fff", fontSize: 13,
+  fontWeight: 700, cursor: "pointer", fontFamily: "Georgia,serif", whiteSpace: "nowrap",
+});
+
+// ── SHARED COMPONENTS ─────────────────────────────────────────────────────────
+function StatBar({ color, streak, label, extra, progress }) {
+  return (
+    <div style={{ background: `linear-gradient(135deg,${color}22,${color}11)`, border: `1px solid ${color}44`, borderRadius: 14, padding: 16, marginBottom: 16, display: "flex", alignItems: "center", gap: 16, flexWrap: "wrap" }}>
+      <div style={{ textAlign: "center" }}>
+        <div style={{ fontSize: 28, fontWeight: 700, color, lineHeight: 1 }}>🔥 {streak}</div>
+        <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{label}</div>
+      </div>
+      <div style={{ flex: 1, minWidth: 140 }}>
+        <div style={{ fontSize: 12, color: "#cbd5e1", marginBottom: 6 }}>{extra}</div>
+        <div style={{ background: "#ffffff11", borderRadius: 100, height: 5, overflow: "hidden" }}>
+          <div style={{ height: "100%", width: `${progress}%`, background: `linear-gradient(90deg,${color},${color}88)`, borderRadius: 100, transition: "width .5s" }} />
+        </div>
+        <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>{progress}%</div>
+      </div>
+    </div>
+  );
+}
+
+function CardBox({ color, title, children }) {
+  return (
+    <div style={{ background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
+      <div style={{ fontSize: 10, letterSpacing: 3, color, textTransform: "uppercase", marginBottom: 4 }}>{title}</div>
+      <div style={{ fontWeight: 700, fontSize: 14 }}>{children}</div>
+    </div>
+  );
+}
+
+function SectionBox({ color, children }) {
+  return <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 16, marginBottom: 14, border: `1px solid ${color}33` }}>{children}</div>;
+}
+
+function Lbl({ children }) {
+  return <div style={{ fontSize: 11, color: "#94a3b8", marginBottom: 10, letterSpacing: 2, textTransform: "uppercase" }}>{children}</div>;
+}
+
+function SliderRow({ label, value, set, min, max, color }) {
+  return (
+    <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+      <span style={{ fontSize: 12, color: "#94a3b8", minWidth: 120 }}>{label}</span>
+      <input type="range" min={min} max={max} value={value}
+        onChange={e => set(Number(e.target.value))}
+        style={{ flex: 1, accentColor: color }} />
+    </div>
+  );
+}
+
+function Empty({ emoji, text }) {
+  return (
+    <div style={{ textAlign: "center", padding: "32px 20px", color: "#475569" }}>
+      <div style={{ fontSize: 40, marginBottom: 8 }}>{emoji}</div>
+      <div style={{ fontSize: 13 }}>{text}</div>
+    </div>
+  );
+}
+
+function KPI({ label, value, color }) {
+  return (
+    <div style={{ textAlign: "center" }}>
+      <div style={{ fontSize: 22, fontWeight: 700, color, lineHeight: 1 }}>{value}</div>
+      <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>{label}</div>
+    </div>
+  );
+}
+
+function MiniChart({ entries, color, objectif }) {
+  if (entries.length < 2) return null;
+  const weights = entries.map(e => e.weight);
+  const minW = Math.min(...weights, objectif) - 1;
+  const maxW = Math.max(...weights) + 1;
+  const W = 300, H = 80;
+  const toY = w => H - ((w - minW) / (maxW - minW)) * H;
+  const pts  = weights.map((w, i) => ({ x: (i / (weights.length - 1)) * W, y: toY(w) }));
+  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
+  const goalY = toY(objectif);
+  return (
+    <div style={{ background: "#ffffff0a", borderRadius: 12, padding: "12px 16px" }}>
+      <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
+        <line x1={0} y1={goalY} x2={W} y2={goalY} stroke="#22c55e" strokeWidth={1} strokeDasharray="4,3" opacity={0.5} />
+        <text x={W - 2} y={goalY - 4} fill="#22c55e" fontSize="9" textAnchor="end" opacity={0.7}>{objectif} kg</text>
+        <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
+        {pts.map((p, i) => <circle key={i} cx={p.x} cy={p.y} r={4} fill={color} />)}
+      </svg>
+      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#475569", marginTop: 4 }}>
+        <span>{entries[0]?.date}</span><span>{entries[entries.length - 1]?.date}</span>
+      </div>
+    </div>
+  );
+}
+
+// ── API KEY MODAL ─────────────────────────────────────────────────────────────
+function ApiKeyModal({ onSave, onSkip }) {
+  const [val, setVal] = useState("");
+  const [err, setErr] = useState(false);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "linear-gradient(160deg,#1e293b,#0f172a)", borderRadius: 20, border: "1px solid #f9731644", padding: 28, maxWidth: 420, width: "100%" }}>
+        <div style={{ fontSize: 10, letterSpacing: 3, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Configuration</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", marginBottom: 12 }}>Clé API Anthropic</div>
+        <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7, marginBottom: 16 }}>
+          Pour activer le coach IA, tu as besoin d'une clé API Anthropic.<br /><br />
+          👉 Va sur <a href="https://console.anthropic.com" target="_blank" style={{ color: "#f97316" }}>console.anthropic.com</a> → API Keys → Create Key<br /><br />
+          Elle sera stockée uniquement dans ton navigateur (jamais envoyée ailleurs).
+        </p>
+        <input type="password" value={val} onChange={e => { setVal(e.target.value); setErr(false); }}
+          placeholder="sk-ant-..."
+          style={{ width: "100%", padding: "12px 14px", background: "#ffffff0a", border: `1px solid ${err ? "#ef4444" : "#f9731644"}`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "monospace", outline: "none", marginBottom: 12 }} />
+        {err && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 8 }}>La clé doit commencer par "sk-"</div>}
+        <button onClick={() => { if (val.trim().startsWith("sk-")) { setApiKey(val.trim()); onSave(); } else setErr(true); }}
+          style={{ width: "100%", padding: 12, background: "#f97316", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Georgia,serif", marginBottom: 8 }}>
+          Enregistrer et continuer
+        </button>
+        <button onClick={onSkip}
+          style={{ width: "100%", padding: 10, background: "transparent", border: "none", color: "#64748b", fontSize: 12, cursor: "pointer", fontFamily: "Georgia,serif" }}>
+          Utiliser sans le coach IA →
+        </button>
+      </div>
+    </div>
+  );
+}
+
+// ── FOCUS TAB ─────────────────────────────────────────────────────────────────
+function FocusTab({ data, update, color }) {
+  const [input, setInput]       = useState("");
+  const [priority, setPriority] = useState("haute");
+  const [mIdx, setMIdx]         = useState(0);
+
+  const addTask = () => {
+    if (!input.trim()) return;
+    update(d => ({ ...d, tasks: [{ id: Date.now(), text: input.trim(), priority, done: false, created: today() }, ...d.tasks] }));
+    setInput("");
+  };
+  const toggleTask = id => update(d => {
+    const tasks   = d.tasks.map(t => t.id === id ? { ...t, done: !t.done } : t);
+    const allDone = tasks.length > 0 && tasks.every(t => t.done);
+    const isNew   = d.lastDate !== today();
+    return { ...d, tasks, streak: allDone && isNew ? d.streak + 1 : d.streak, lastDate: today() };
+  });
+  const del = id => update(d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) }));
+
+  const pending  = data.tasks.filter(t => !t.done);
+  const done     = data.tasks.filter(t => t.done);
+  const progress = data.tasks.length > 0 ? Math.round((done.length / data.tasks.length) * 100) : 0;
+  const pc = { haute: "#ef4444", normale: color, basse: "#94a3b8" };
+  const pl = { haute: "🔴 Haute", normale: "🟠 Normale", basse: "⚪ Basse" };
+
+  return (
+    <div>
+      <CardBox color={color} title="Objectif S46">
+        {data.weeklyGoal}
+        {data.weekBilan && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 6, fontWeight: 400, fontStyle: "italic" }}>💬 {data.weekBilan}</div>}
+      </CardBox>
+
+      <StatBar color={color} streak={data.streak} label="jours de listes complètes"
+        extra={`${done.length}/${data.tasks.length} tâches — méthode 1-3-1`} progress={progress} />
+
+      <div onClick={() => setMIdx(i => (i + 1) % data.mantras.length)}
+        style={{ background: "#ffffff06", borderRadius: 12, padding: "12px 16px", marginBottom: 14, borderLeft: `3px solid ${color}`, cursor: "pointer", fontSize: 13, color: "#cbd5e1", fontStyle: "italic" }}>
+        ✨ {data.mantras[mIdx]} <span style={{ color: "#475569", fontSize: 11 }}>— clic pour changer</span>
+      </div>
+
+      <SectionBox color={color}>
+        <Lbl>Ajouter une tâche</Lbl>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <input value={input} onChange={e => setInput(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && addTask()}
+              placeholder="Quelle est ta priorité du jour ?" style={inp(color)} />
+            <select value={priority} onChange={e => setPriority(e.target.value)}
+              style={{ ...inp(color), maxWidth: 140, flex: "none" }}>
+              <option value="haute">🔴 Haute</option>
+              <option value="normale">🟠 Normale</option>
+              <option value="basse">⚪ Basse</option>
+            </select>
+          </div>
+          <button onClick={addTask} style={{ ...btn(color), width: "100%" }}>+ Ajouter</button>
+        </div>
+      </SectionBox>
+
+      {data.tasks.length === 0 && <Empty emoji="✅" text="Ajoute ta première priorité du jour !" />}
+      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+        {[...pending, ...done].map(t => (
+          <div key={t.id} style={{
+            display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px",
+            background: t.done ? "#ffffff05" : "#ffffff0d", borderRadius: 12,
+            border: `1px solid ${t.done ? "#ffffff11" : pc[t.priority] + "44"}`,
+            opacity: t.done ? 0.55 : 1,
+          }}>
+            <button onClick={() => toggleTask(t.id)} style={{
+              width: 24, height: 24, borderRadius: 50, border: `2px solid ${pc[t.priority]}`,
+              background: t.done ? pc[t.priority] : "transparent",
+              cursor: "pointer", flexShrink: 0, fontSize: 11, marginTop: 2,
+              display: "flex", alignItems: "center", justifyContent: "center",
+            }}>{t.done ? "✓" : ""}</button>
+            <div style={{ flex: 1 }}>
+              <div style={{ fontSize: 14, textDecoration: t.done ? "line-through" : "none", color: t.done ? "#64748b" : "#e2e8f0" }}>{t.text}</div>
+              <div style={{ fontSize: 10, color: pc[t.priority], fontWeight: 700, marginTop: 3 }}>{pl[t.priority]}</div>
+            </div>
+            <button onClick={() => del(t.id)} style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 18, lineHeight: 1 }}>×</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ── ANGLAIS TAB ───────────────────────────────────────────────────────────────
+function AnglaisTab({ data, update, color }) {
+  const [sType, setSType]   = useState("ecoute");
+  const [dur, setDur]       = useState(20);
+  const [word, setWord]     = useState("");
+  const [wordFr, setWordFr] = useState("");
+  const [phrase, setPhrase] = useState("");
+  const [sIdx, setSIdx]     = useState(0);
+  const [view, setView]     = useState("apprendre");
+
+  const logSession = () => {
+    const s = { id: Date.now(), type: sType, duration: Number(dur), date: today() };
+    const isNew = data.lastDate !== today();
+    update(d => ({ ...d, sessions: [s, ...d.sessions], streak: isNew ? d.streak + 1 : d.streak, lastDate: today() }));
+  };
+  const addVocab = () => {
+    if (!word.trim()) return;
+    update(d => ({ ...d, vocab: [{ id: Date.now(), word: word.trim(), fr: wordFr.trim(), phrase: phrase.trim(), mastered: false, date: today() }, ...d.vocab] }));
+    setWord(""); setWordFr(""); setPhrase("");
+  };
+  const toggleM = id => update(d => ({ ...d, vocab: d.vocab.map(v => v.id === id ? { ...v, mastered: !v.mastered } : v) }));
+
+  const weekMin   = data.sessions.filter(s => (new Date() - new Date(s.date)) / 86400000 < 7).reduce((s, x) => s + x.duration, 0);
+  const mastered  = data.vocab.filter(v => v.mastered).length;
+  const icons     = { ecoute: "🎧", lecture: "📖", ecriture: "✍️", conversation: "💬", series: "📺", duolingo: "🦜" };
+  const showVocab = view === "apprendre" ? data.vocab.filter(v => !v.mastered) : data.vocab.filter(v => v.mastered);
+
+  return (
+    <div>
+      <CardBox color={color} title="Roadmap Nov → Fév">
+        <div style={{ display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
+          {data.monthlyGoals.map((g, i) => (
+            <div key={i} style={{ display: "flex", gap: 10, fontSize: 13, fontWeight: 400 }}>
+              <span style={{ color, minWidth: 72, fontWeight: 700 }}>{g.month}</span>
+              <span style={{ color: "#cbd5e1" }}>{g.goal}</span>
+            </div>
+          ))}
+        </div>
+      </CardBox>
+
+      <StatBar color={color} streak={data.streak} label="jours consécutifs de pratique"
+        extra={`${weekMin} min cette semaine · ${mastered}/${data.vocab.length} mots`}
+        progress={Math.min(100, Math.round((weekMin / 150) * 100))} />
+
+      <div onClick={() => setSIdx(i => (i + 1) % data.proSentences.length)}
+        style={{ background: "#ffffff06", borderRadius: 12, padding: "12px 16px", marginBottom: 14, borderLeft: `3px solid ${color}`, cursor: "pointer" }}>
+        <div style={{ fontSize: 10, color, letterSpacing: 2, textTransform: "uppercase", marginBottom: 4 }}>💬 Phrase pro du jour</div>
+        <div style={{ fontSize: 13, color: "#e2e8f0", fontStyle: "italic" }}>"{data.proSentences[sIdx]}"</div>
+        <div style={{ fontSize: 11, color: "#475569", marginTop: 3 }}>Répète à voix haute · clic pour changer</div>
+      </div>
+
+      <SectionBox color={color}>
+        <Lbl>Logger une session</Lbl>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+            <select value={sType} onChange={e => setSType(e.target.value)} style={{ ...inp(color), flex: "none" }}>
+              <option value="ecoute">🎧 Écoute</option>
+              <option value="lecture">📖 Lecture</option>
+              <option value="ecriture">✍️ Écriture</option>
+              <option value="conversation">💬 Conversation</option>
+              <option value="series">📺 Série VO</option>
+              <option value="duolingo">🦜 Duolingo</option>
+            </select>
+            <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+              <input type="number" value={dur} onChange={e => setDur(e.target.value)} min={5} max={180}
+                style={{ ...inp(color), maxWidth: 70, flex: "none" }} />
+              <span style={{ color: "#94a3b8", fontSize: 13 }}>min</span>
+            </div>
+          </div>
+          <button onClick={logSession} style={{ ...btn(color), width: "100%" }}>✓ Valider la session</button>
+        </div>
+      </SectionBox>
+
+      <SectionBox color={color}>
+        <Lbl>Nouveau mot</Lbl>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={word} onChange={e => setWord(e.target.value)} placeholder="Mot anglais" style={inp(color)} />
+            <input value={wordFr} onChange={e => setWordFr(e.target.value)} placeholder="Traduction" style={inp(color)} />
+          </div>
+          <input value={phrase} onChange={e => setPhrase(e.target.value)} placeholder="Ta phrase d'exemple..." style={inp(color)} />
+          <button onClick={addVocab} style={{ ...btn(color), width: "100%" }}>+ Ajouter le mot</button>
+        </div>
+      </SectionBox>
+
+      {data.vocab.length > 0 && (
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 10 }}>
+            <Lbl>{view === "apprendre" ? `${data.vocab.filter(v => !v.mastered).length} mots à apprendre` : `${mastered} mots maîtrisés`}</Lbl>
+            <button onClick={() => setView(v => v === "apprendre" ? "maitrise" : "apprendre")} style={{
+              background: "#ffffff11", border: "none", borderRadius: 8, padding: "3px 10px",
+              color: "#94a3b8", fontSize: 11, cursor: "pointer", fontFamily: "Georgia,serif", marginBottom: 10,
+            }}>{view === "apprendre" ? "Voir maîtrisés →" : "← À apprendre"}</button>
+          </div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {showVocab.slice(0, 15).map(v => (
+              <div key={v.id} style={{
+                padding: "11px 13px", background: v.mastered ? "#ffffff05" : "#ffffff0d",
+                borderRadius: 10, border: `1px solid ${v.mastered ? "#ffffff11" : color + "33"}`,
+                opacity: v.mastered ? 0.6 : 1,
+              }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <button onClick={() => toggleM(v.id)} style={{
+                    width: 22, height: 22, borderRadius: 50, border: `2px solid ${color}`,
+                    background: v.mastered ? color : "transparent", cursor: "pointer",
+                    flexShrink: 0, fontSize: 11, display: "flex", alignItems: "center", justifyContent: "center",
+                  }}>{v.mastered ? "✓" : ""}</button>
+                  <span style={{ fontWeight: 700, color: v.mastered ? "#64748b" : "#e2e8f0", fontSize: 14 }}>{v.word}</span>
+                  {v.fr && <span style={{ color: "#94a3b8", fontSize: 12 }}>→ {v.fr}</span>}
+                  <span style={{ marginLeft: "auto", fontSize: 10, color: "#475569" }}>{v.date}</span>
+                </div>
+                {v.phrase && <div style={{ marginTop: 4, marginLeft: 30, fontSize: 12, color: "#64748b", fontStyle: "italic" }}>"{v.phrase}"</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {data.sessions.length > 0 && (
+        <div style={{ marginTop: 16 }}>
+          <Lbl>Sessions récentes</Lbl>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {data.sessions.slice(0, 6).map(s => (
+              <div key={s.id} style={{ display: "flex", alignItems: "center", gap: 10, padding: "10px 13px", background: "#ffffff0d", borderRadius: 10 }}>
+                <span style={{ fontSize: 16 }}>{icons[s.type]}</span>
+                <span style={{ flex: 1, textTransform: "capitalize", fontSize: 12 }}>{s.type}</span>
+                <span style={{ color, fontWeight: 700, fontSize: 13 }}>{s.duration} min</span>
+                <span style={{ fontSize: 10, color: "#475569" }}>{s.date}</span>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── POIDS TAB ─────────────────────────────────────────────────────────────────
+function PoidsTab({ data, update, color }) {
+  const [weight, setWeight] = useState("");
+  const [mood, setMood]     = useState(4);
+  const [sleep, setSleep]   = useState(7);
+  const [energy, setEnergy] = useState(4);
+  const [note, setNote]     = useState("");
+
+  const addEntry = () => {
+    if (!weight) return;
+    const e = { id: Date.now(), weight: Number(weight), mood, sleep, energy, note: note.trim(), date: today() };
+    const isNew = data.lastDate !== today();
+    update(d => ({ ...d, entries: [e, ...d.entries], streak: isNew ? d.streak + 1 : d.streak, lastDate: today() }));
+    setWeight(""); setNote("");
+  };
+
+  const entries   = data.entries || [];
+  const latest    = entries[0];
+  const prev      = entries[1];
+  const diff      = latest && prev ? (latest.weight - prev.weight).toFixed(1) : null;
+  const totalLoss = entries.length > 1 ? (entries[entries.length - 1].weight - latest.weight).toFixed(1) : null;
+  const toGoal    = latest ? (latest.weight - data.objectif).toFixed(1) : null;
+  const moodE     = ["", "😩", "😕", "😐", "😊", "😄"];
+  const energyE   = ["", "🪫", "🔋", "⚡", "🔥", "💥"];
+
+  return (
+    <div>
+      <div style={{ background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
+        <div style={{ fontSize: 10, letterSpacing: 3, color, textTransform: "uppercase", marginBottom: 6 }}>Objectif S46</div>
+        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{data.weeklyGoal}</div>
+        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
+          {latest && <KPI label="Actuel" value={`${latest.weight} kg`} color={color} />}
+          <KPI label="Objectif" value={`${data.objectif} kg`} color="#94a3b8" />
+          {toGoal && <KPI label="Restant" value={`-${toGoal} kg`} color="#f97316" />}
+          {totalLoss && <KPI label="Perdus 🎉" value={`-${totalLoss} kg`} color={color} />}
+        </div>
+        <div style={{ marginTop: 10, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>💬 {data.weekBilan}</div>
+        {data.aikido && <div style={{ marginTop: 6, fontSize: 13, color }}>🥋 {data.aikido}</div>}
+      </div>
+
+      <StatBar color={color} streak={data.streak} label="jours de suivi consécutifs"
+        extra={diff ? `Variation : ${Number(diff) > 0 ? "+" : ""}${diff} kg` : "Lance ton suivi quotidien"}
+        progress={latest ? Math.round(((93 - latest.weight) / (93 - data.objectif)) * 100) : 0} />
+
+      <SectionBox color={color}>
+        <Lbl>Check-in du jour</Lbl>
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+            <input type="number" value={weight} onChange={e => setWeight(e.target.value)}
+              placeholder="Poids (ex: 91.5)" step="0.1" min="50" max="200"
+              style={{ ...inp(color), maxWidth: 150 }} />
+            <span style={{ color: "#94a3b8" }}>kg</span>
+          </div>
+          <SliderRow label={`Humeur ${moodE[mood]}`}       value={mood}   set={setMood}   min={1} max={5}  color={color} />
+          <SliderRow label={`Sommeil ${sleep}h`}            value={sleep}  set={setSleep}  min={4} max={12} color={color} />
+          <SliderRow label={`Énergie ${energyE[energy]}`}   value={energy} set={setEnergy} min={1} max={5}  color={color} />
+          <input value={note} onChange={e => setNote(e.target.value)}
+            placeholder="Note du jour — repas, sport..." style={inp(color)} />
+          <button onClick={addEntry} style={{ ...btn(color), width: "100%" }}>Enregistrer mon check-in</button>
+        </div>
+      </SectionBox>
+
+      <div style={{ background: "#ffffff06", borderRadius: 12, padding: "12px 16px", marginBottom: 14, borderLeft: `3px solid ${color}` }}>
+        <div style={{ fontSize: 10, color, letterSpacing: 2, textTransform: "uppercase", marginBottom: 6 }}>Stratégie alimentaire</div>
+        <div style={{ fontSize: 13, color: "#cbd5e1", display: "flex", flexDirection: "column", gap: 4 }}>
+          <span>🥗 Midi : protéine + légumes</span>
+          <span>🌙 Soir : protéine + légumes, pas de féculents</span>
+          <span>💧 1,5L d'eau minimum par jour</span>
+          <span>😴 7h de sommeil minimum</span>
+        </div>
+      </div>
+
+      {entries.length === 0 && <Empty emoji="🌿" text="Commence ton premier check-in !" />}
+
+      {entries.length > 1 && (
+        <div style={{ marginBottom: 14 }}>
+          <Lbl>Évolution du poids</Lbl>
+          <MiniChart entries={[...entries].reverse()} color={color} objectif={data.objectif} />
+        </div>
+      )}
+
+      {entries.length > 0 && (
+        <div>
+          <Lbl>Historique</Lbl>
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {entries.slice(0, 10).map(e => (
+              <div key={e.id} style={{ padding: "11px 13px", background: "#ffffff0d", borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between" }}>
+                  <span style={{ fontWeight: 700, fontSize: 16, color }}>{e.weight} kg</span>
+                  <span style={{ fontSize: 10, color: "#475569" }}>{e.date}</span>
+                </div>
+                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
+                  <span>{moodE[e.mood]} {e.mood}/5</span>
+                  <span>😴 {e.sleep}h</span>
+                  <span>{energyE[e.energy]} {e.energy}/5</span>
+                </div>
+                {e.note && <div style={{ fontSize: 12, color: "#cbd5e1", fontStyle: "italic", marginTop: 3 }}>"{e.note}"</div>}
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ── CHAT COACH ────────────────────────────────────────────────────────────────
+function ChatCoach({ tab, data, history, setHistory, activeColor, onClose, onNeedKey }) {
+  const [input, setInput]     = useState("");
+  const [loading, setLoading] = useState(false);
+  const bottomRef = useRef(null);
+
+  useEffect(() => { bottomRef.current?.scrollIntoView({ behavior: "smooth" }); }, [history, loading]);
+
+  const tabNames = {
+    procrastination: "anti-procrastination et organisation",
+    anglais: "apprentissage de l'anglais professionnel",
+    poids: "bien-être et perte de poids",
+  };
+
+  const poids = data.poids.entries;
+  const systemPrompt = `Tu es un coach personnel bienveillant, direct et motivant. Tu parles à quelqu'un qui travaille sur 3 axes : ne plus procrastiner, améliorer son anglais (intermédiaire → professionnel), et perdre du poids.
+
+Son contexte (fichier coaching S44-S46 2025) :
+- Organisation : Méthode 1-3-1. Bilan S46 : "manque de temps, difficile de tenir le programme". Priorité en cours : dossier acharnement thérapeutique (famille — contexte émotionnel difficile). Pas de système de suivi avant cet outil.
+- Anglais : Intermédiaire → professionnel (contexte IT/SDM). Pratique : Duolingo + dico lettre G-H-I. Points forts : prise de parole en meeting, lecture. À améliorer : expression écrite, prononciation. Roadmap : Nov compréhension orale, Déc fluidité réunions, Jan vocab IT, Fév confiance à l'oral.
+- Poids : Départ 93 kg (S44), actuellement ${poids[0]?.weight || "91.8"} kg, objectif 80 kg. Pratique Aïkido (prépare 2ème Kiyu). Stratégie : protéine + légumes, pas de féculents le soir. Tendance à trop manger le soir.
+- Streaks : Focus ${data.procrastination.streak}j / Anglais ${data.anglais.streak}j / Poids ${data.poids.streak}j.
+- Il est à Rotterdam (Pays-Bas). Utilise l'app en continu quand il y pense.
+
+Onglet actif : ${tabNames[tab]}.
+
+Réponds en français. Sois concis (3-5 phrases max sauf question complexe), chaleureux, direct, sans bullshit. Donne des conseils actionnables et spécifiques. Emojis avec parcimonie. Sois personnel — tu le connais.`;
+
+  const send = async () => {
+    if (!input.trim() || loading) return;
+    const apiKey = getApiKey();
+    if (!apiKey) { onNeedKey(); return; }
+    const msg  = { role: "user", content: input.trim() };
+    const msgs = [...history, msg];
+    setHistory(msgs);
+    setInput("");
+    setLoading(true);
+    try {
+      const r = await fetch("https://api.anthropic.com/v1/messages", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-api-key": apiKey,
+          "anthropic-version": "2023-06-01",
+          "anthropic-dangerous-direct-browser-access": "true",
+        },
+        body: JSON.stringify({ model: "claude-sonnet-4-20250514", max_tokens: 1000, system: systemPrompt, messages: msgs }),
+      });
+      const d   = await r.json();
+      const txt = d.content?.[0]?.text || (d.error ? `Erreur API : ${d.error.message}` : "Désolé, erreur.");
+      setHistory([...msgs, { role: "assistant", content: txt }]);
+    } catch (err) {
+      setHistory([...msgs, { role: "assistant", content: `Erreur de connexion : ${err.message}` }]);
+    }
+    setLoading(false);
+  };
+
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#0000009a", zIndex: 200, display: "flex", alignItems: "flex-end", justifyContent: "flex-end", padding: 12 }}>
+      <div style={{
+        width: "100%", maxWidth: 430, height: "70vh",
+        background: "linear-gradient(160deg,#1e293b,#0f172a)",
+        borderRadius: 20, border: `1px solid ${activeColor}44`,
+        display: "flex", flexDirection: "column",
+        boxShadow: `0 0 40px ${activeColor}33`,
+      }}>
+        <div style={{ padding: "12px 16px", borderBottom: "1px solid #ffffff11", display: "flex", alignItems: "center", gap: 10 }}>
+          <div style={{ width: 34, height: 34, borderRadius: 50, background: activeColor, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16 }}>🤖</div>
+          <div>
+            <div style={{ fontWeight: 700, fontSize: 13 }}>Mon Coach IA</div>
+            <div style={{ fontSize: 10, color: "#94a3b8" }}>Connaît ton historique S44 → maintenant</div>
+          </div>
+          <button onClick={onClose} style={{ marginLeft: "auto", background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>
+        </div>
+        <div style={{ flex: 1, overflowY: "auto", padding: "12px 16px", display: "flex", flexDirection: "column", gap: 10 }}>
+          {history.length === 0 && (
+            <div style={{ color: "#64748b", fontSize: 12, fontStyle: "italic", textAlign: "center", marginTop: 24, lineHeight: 1.7 }}>
+              👋 Salut ! Je connais ton parcours depuis la S44.<br />Pose-moi une question sur tes 3 axes !
+            </div>
+          )}
+          {history.map((m, i) => (
+            <div key={i} style={{
+              alignSelf: m.role === "user" ? "flex-end" : "flex-start",
+              maxWidth: "88%",
+              background: m.role === "user" ? activeColor : "#ffffff11",
+              borderRadius: m.role === "user" ? "16px 16px 4px 16px" : "16px 16px 16px 4px",
+              padding: "10px 13px", fontSize: 13, lineHeight: 1.55, whiteSpace: "pre-wrap",
+            }}>{m.content}</div>
+          ))}
+          {loading && <div style={{ alignSelf: "flex-start", background: "#ffffff11", borderRadius: "16px 16px 16px 4px", padding: "10px 14px", fontSize: 14, color: "#94a3b8" }}>✦ ✦ ✦</div>}
+          <div ref={bottomRef} />
+        </div>
+        <div style={{ padding: "10px 12px", borderTop: "1px solid #ffffff11", display: "flex", gap: 8 }}>
+          <input value={input} onChange={e => setInput(e.target.value)}
+            onKeyDown={e => e.key === "Enter" && send()}
+            placeholder="Pose une question..." style={{ ...inp(activeColor), padding: "10px 13px" }} />
+          <button onClick={send} disabled={loading || !input.trim()}
+            style={{ ...btn(activeColor), opacity: loading || !input.trim() ? 0.5 : 1, padding: "10px 14px" }}>→</button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ── APP ───────────────────────────────────────────────────────────────────────
+function App() {
+  const [tab, setTab]           = useState("procrastination");
+  const [data, setData]         = useState(null);
+  const [syncStatus, setSyncStatus] = useState("syncing"); // ok | syncing | error
+  const [chatOpen, setChatOpen] = useState(false);
+  const [showApiModal, setShowApiModal] = useState(false);
+  const saveTimer = useRef(null);
+
+  // Load from Supabase on mount
+  useEffect(() => {
+    async function load() {
+      setSyncStatus("syncing");
+      try {
+        const { data: rows, error } = await supabase
+          .from("coach_data")
+          .select("*")
+          .eq("id", "main")
+          .single();
+
+        if (error || !rows) {
+          // First time: push historical data
+          const init = JSON.parse(JSON.stringify(HISTORICAL_DATA));
+          await supabase.from("coach_data").upsert({
+            id: "main",
+            procrastination: init.procrastination,
+            anglais: init.anglais,
+            poids: init.poids,
+            chat_history: init.chatHistory,
+            updated_at: new Date().toISOString(),
+          });
+          setData(init);
+        } else {
+          setData({
+            procrastination: rows.procrastination,
+            anglais: rows.anglais,
+            poids: rows.poids,
+            chatHistory: rows.chat_history || [],
+          });
+        }
+        setSyncStatus("ok");
+      } catch (e) {
+        console.error(e);
+        setData(JSON.parse(JSON.stringify(HISTORICAL_DATA)));
+        setSyncStatus("error");
+      }
+    }
+    load();
+  }, []);
+
+  // Save to Supabase with debounce (1.5s)
+  useEffect(() => {
+    if (!data) return;
+    if (saveTimer.current) clearTimeout(saveTimer.current);
+    setSyncStatus("syncing");
+    saveTimer.current = setTimeout(async () => {
+      try {
+        await supabase.from("coach_data").upsert({
+          id: "main",
+          procrastination: data.procrastination,
+          anglais: data.anglais,
+          poids: data.poids,
+          chat_history: data.chatHistory,
+          updated_at: new Date().toISOString(),
+        });
+        setSyncStatus("ok");
+      } catch {
+        setSyncStatus("error");
+      }
+    }, 1500);
+  }, [data]);
+
+  const update = (key, val) =>
+    setData(prev => ({ ...prev, [key]: typeof val === "function" ? val(prev[key]) : val }));
+
+  if (!data) {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg,#0f0c29,#1a1a2e)", display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16 }}>
+        <div style={{ fontSize: 40 }}>🤖</div>
+        <div style={{ color: "#94a3b8", fontSize: 14 }}>Chargement depuis le cloud…</div>
+      </div>
+    );
+  }
+
+  const activeTab = TABS.find(t => t.id === tab);
+  const syncColors = { ok: "#22c55e", syncing: "#f97316", error: "#ef4444" };
+  const syncLabels = { ok: "Synchronisé", syncing: "Sync…", error: "Hors ligne" };
+
+  return (
+    <div style={{
+      minHeight: "100vh", minHeight: "100dvh",
+      background: "linear-gradient(135deg,#0f0c29 0%,#1a1a2e 50%,#16213e 100%)",
+      fontFamily: "Georgia,'Times New Roman',serif",
+      color: "#e2e8f0", display: "flex", flexDirection: "column",
+    }}>
+      {showApiModal && (
+        <ApiKeyModal onSave={() => setShowApiModal(false)} onSkip={() => setShowApiModal(false)} />
+      )}
+
+      <header style={{ padding: "16px 20px 0", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+        <div>
+          <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
+            <span className={`sync-dot ${syncStatus}`} style={{ background: syncColors[syncStatus] }} />
+            <span style={{ fontSize: 9, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase" }}>
+              {syncLabels[syncStatus]} · S44 2025
+            </span>
+          </div>
+          <h1 style={{
+            margin: 0, fontSize: 20, fontWeight: 700,
+            background: `linear-gradient(90deg,${activeTab.color},#e2e8f0)`,
+            WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
+          }}>Mon espace de progression</h1>
+        </div>
+        <button onClick={() => setChatOpen(o => !o)} style={{
+          background: activeTab.color, border: "none", borderRadius: 50,
+          width: 46, height: 46, fontSize: 20, cursor: "pointer",
+          boxShadow: `0 0 18px ${activeTab.color}66`,
+        }} title="Mon coach IA">🤖</button>
+      </header>
+
+      <nav style={{ display: "flex", gap: 6, padding: "12px 20px 0" }}>
+        {TABS.map(t => (
+          <button key={t.id} onClick={() => setTab(t.id)} style={{
+            flex: 1, padding: "10px 4px",
+            border: `2px solid ${tab === t.id ? t.color : "transparent"}`,
+            borderRadius: 12, background: tab === t.id ? `${t.color}22` : "#ffffff0a",
+            color: tab === t.id ? t.color : "#94a3b8",
+            fontFamily: "Georgia,serif", fontSize: 12,
+            fontWeight: tab === t.id ? 700 : 400, cursor: "pointer",
+          }}>{t.label}</button>
+        ))}
+      </nav>
+
+      <main style={{ flex: 1, padding: "14px 20px", overflowY: "auto", paddingBottom: 30 }}>
+        {tab === "procrastination" && <FocusTab   data={data.procrastination} update={v => update("procrastination", v)} color={TABS[0].color} />}
+        {tab === "anglais"         && <AnglaisTab data={data.anglais}         update={v => update("anglais", v)}         color={TABS[1].color} />}
+        {tab === "poids"           && <PoidsTab   data={data.poids}           update={v => update("poids", v)}           color={TABS[2].color} />}
+      </main>
+
+      {chatOpen && (
+        <ChatCoach tab={tab} data={data}
+          history={data.chatHistory} setHistory={h => update("chatHistory", h)}
+          activeColor={activeTab.color}
+          onClose={() => setChatOpen(false)}
+          onNeedKey={() => { setChatOpen(false); setShowApiModal(true); }} />
+      )}
+    </div>
+  );
+}
+
+const root = ReactDOM.createRoot(document.getElementById("root"));
+root.render(<App />);
+</script>
+</body>
+</html>
