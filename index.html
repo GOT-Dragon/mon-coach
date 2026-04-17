@@ -1,14 +1,10 @@
 <!DOCTYPE html>
 <html lang="fr">
 <head>
-  <link rel="manifest" href="/mon-coach/manifest.json" />
-  <link rel="apple-touch-icon" sizes="192x192" href="/mon-coach/icon-192.png" />
-  <link rel="icon" type="image/png" sizes="192x192" href="/mon-coach/icon-192.png" />
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Mon Coach Personnel</title>
   <meta name="theme-color" content="#0f0c29" />
-  <meta name="mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
   <meta name="apple-mobile-web-app-title" content="Mon Coach" />
@@ -129,9 +125,8 @@ const HISTORICAL_DATA = {
 function today() { return new Date().toISOString().split("T")[0]; }
 
 const TABS = [
-  { id: "procrastination", label: "⚡ Focus",     color: "#f97316" },
-  { id: "anglais",         label: "🇬🇧 Anglais",  color: "#3b82f6" },
   { id: "poids",           label: "🌿 Bien-être", color: "#22c55e" },
+  { id: "procrastination", label: "⚡ Focus",     color: "#f97316" },
 ];
 
 const inp = color => ({
@@ -605,7 +600,7 @@ function ChatCoach({ tab, data, history, setHistory, activeColor, onClose, onNee
 
   const tabNames = {
     procrastination: "anti-procrastination et organisation",
-    anglais: "apprentissage de l'anglais professionnel",
+
     poids: "bien-être et perte de poids",
   };
 
@@ -614,9 +609,8 @@ function ChatCoach({ tab, data, history, setHistory, activeColor, onClose, onNee
 
 Son contexte (fichier coaching S44-S46 2025) :
 - Organisation : Méthode 1-3-1. Bilan S46 : "manque de temps, difficile de tenir le programme". Priorité en cours : dossier acharnement thérapeutique (famille — contexte émotionnel difficile). Pas de système de suivi avant cet outil.
-- Anglais : Intermédiaire → professionnel (contexte IT/SDM). Pratique : Duolingo + dico lettre G-H-I. Points forts : prise de parole en meeting, lecture. À améliorer : expression écrite, prononciation. Roadmap : Nov compréhension orale, Déc fluidité réunions, Jan vocab IT, Fév confiance à l'oral.
 - Poids : Départ 93 kg (S44), actuellement ${poids[0]?.weight || "91.8"} kg, objectif 80 kg. Pratique Aïkido (prépare 2ème Kiyu). Stratégie : protéine + légumes, pas de féculents le soir. Tendance à trop manger le soir.
-- Streaks : Focus ${data.procrastination.streak}j / Anglais ${data.anglais.streak}j / Poids ${data.poids.streak}j.
+- Streaks : Focus ${data.procrastination.streak}j / Poids ${data.poids.streak}j.
 - Il est à Rotterdam (Pays-Bas). Utilise l'app en continu quand il y pense.
 
 Onglet actif : ${tabNames[tab]}.
@@ -701,7 +695,7 @@ Réponds en français. Sois concis (3-5 phrases max sauf question complexe), cha
 
 // ── APP ───────────────────────────────────────────────────────────────────────
 function App() {
-  const [tab, setTab]           = useState("procrastination");
+  const [tab, setTab]           = useState("poids");
   const [data, setData]         = useState(null);
   const [syncStatus, setSyncStatus] = useState("syncing"); // ok | syncing | error
   const [chatOpen, setChatOpen] = useState(false);
@@ -734,11 +728,9 @@ function App() {
         } else {
           // Merge with defaults to ensure all keys exist
           const p = rows.procrastination || {};
-          const a = rows.anglais || {};
           const w = rows.poids || {};
           setData({
             procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras },
-            anglais: { ...defaults.anglais, ...a, sessions: a.sessions || defaults.anglais.sessions, vocab: a.vocab || defaults.anglais.vocab, monthlyGoals: a.monthlyGoals || defaults.anglais.monthlyGoals, proSentences: a.proSentences || defaults.anglais.proSentences },
             poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries },
             chatHistory: rows.chat_history || [],
           });
@@ -763,7 +755,6 @@ function App() {
         await supabase.from("coach_data").upsert({
           id: "main",
           procrastination: data.procrastination,
-          anglais: data.anglais,
           poids: data.poids,
           chat_history: data.chatHistory,
           updated_at: new Date().toISOString(),
@@ -837,9 +828,8 @@ function App() {
       </nav>
 
       <main style={{ flex: 1, padding: "14px 20px", overflowY: "auto", paddingBottom: 30 }}>
-        {tab === "procrastination" && <FocusTab   data={data.procrastination} update={v => update("procrastination", v)} color={TABS[0].color} />}
-        {tab === "anglais"         && <AnglaisTab data={data.anglais}         update={v => update("anglais", v)}         color={TABS[1].color} />}
-        {tab === "poids"           && <PoidsTab   data={data.poids}           update={v => update("poids", v)}           color={TABS[2].color} />}
+        {tab === "poids"           && <PoidsTab   data={data.poids}           update={v => update("poids", v)}           color={TABS[0].color} />}
+        {tab === "procrastination" && <FocusTab   data={data.procrastination} update={v => update("procrastination", v)} color={TABS[1].color} />}
       </main>
 
       {chatOpen && (

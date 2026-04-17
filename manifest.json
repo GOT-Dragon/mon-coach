@@ -1,12 +1,12 @@
 {
   "name": "Mon Coach Personnel",
   "short_name": "Mon Coach",
-  "description": "Coaching personnel - Focus, Anglais, Bien-être",
+  "description": "Coaching personnel - Focus & Bien-être",
   "start_url": "/mon-coach/",
   "scope": "/mon-coach/",
   "display": "standalone",
   "background_color": "#1a1a2e",
-  "theme_color": "#f59e0b",
+  "theme_color": "#22c55e",
   "orientation": "portrait",
   "icons": [
     {
