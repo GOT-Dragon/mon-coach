@@ -121,6 +121,7 @@ const HISTORICAL_DATA = {
     defis: {
       sucre:      { current: 0, record: 0 },
       grignotage: { current: 0, record: 0 },
+      alcool:     { current: 0, record: 0 },
     },
   },
   chatHistory: [],
@@ -674,6 +675,7 @@ function PoidsTab({ data, update, color }) {
         {[
           { key: "sucre",      emoji: "🍬", label: "Jours sans sucre ajouté" },
           { key: "grignotage", emoji: "🌙", label: "Jours sans grignotage le soir" },
+          { key: "alcool",     emoji: "🍷", label: "Jours sans alcool" },
         ].map(({ key, emoji, label }) => {
           const def = defis[key] || { current: 0, record: 0 };
           return (
