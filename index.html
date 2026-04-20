@@ -27,6 +27,12 @@
     .sync-dot.syncing { background: #f97316; animation: pulse 1s infinite; }
     .sync-dot.error { background: #ef4444; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+    @keyframes fadeIn { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
+    @keyframes scaleIn { from{opacity:0;transform:scale(0.8)} to{opacity:1;transform:scale(1)} }
+    @keyframes shimmer { 0%,100%{opacity:0.7} 50%{opacity:1} }
+    .splash-icon { animation: scaleIn 0.6s ease forwards; }
+    .splash-quote { animation: fadeIn 0.8s ease 0.4s both; }
+    .splash-btn { animation: fadeIn 0.8s ease 0.9s both; }
   </style>
 </head>
 <body>
@@ -827,8 +833,101 @@ Réponds en français. Sois concis (3-5 phrases max sauf question complexe), cha
   );
 }
 
+// ── SPLASH SCREEN ────────────────────────────────────────────────────────────
+const SPLASH_QUOTES = [
+  { text: "La constance bat la perfection.", auteur: null },
+  { text: "Tu n'as pas besoin de plus de temps, tu as besoin de plus de direction.", auteur: null },
+  { text: "Aujourd'hui, je prends les rênes de ma vie.", auteur: null },
+  { text: "Les petites actions répétées chaque jour créent les grandes réussites.", auteur: null },
+  { text: "La discipline est le pont entre les objectifs et la réussite.", auteur: "Jim Rohn" },
+  { text: "Le succès est la somme de petits efforts répétés jour après jour.", auteur: "Robert Collier" },
+  { text: "Tu n'as pas besoin d'être parfait, seulement meilleur qu'hier.", auteur: null },
+  { text: "L'organisation libère l'esprit et révèle le potentiel.", auteur: "Stephen R. Covey" },
+  { text: "Préfère la régularité à la quantité. 10 minutes par jour changent tout.", auteur: null },
+  { text: "Chaque soir : noter 1 succès + 1 chose à améliorer.", auteur: null },
+];
+
+function SplashScreen({ onEnter }) {
+  const quote = SPLASH_QUOTES[Math.floor(Math.random() * SPLASH_QUOTES.length)];
+  return (
+    <div
+      onClick={onEnter}
+      style={{
+        minHeight: "100vh", minHeight: "100dvh",
+        background: "linear-gradient(135deg,#0f0c29 0%,#1a1a2e 50%,#16213e 100%)",
+        display: "flex", flexDirection: "column",
+        alignItems: "center", justifyContent: "center",
+        padding: 32, cursor: "pointer", userSelect: "none",
+        position: "relative", overflow: "hidden",
+      }}
+    >
+      {/* Cercles décoratifs en fond */}
+      <div style={{
+        position: "absolute", width: 300, height: 300,
+        borderRadius: "50%", border: "1px solid #22c55e22",
+        top: "10%", left: "50%", transform: "translateX(-50%)",
+        pointerEvents: "none",
+      }} />
+      <div style={{
+        position: "absolute", width: 500, height: 500,
+        borderRadius: "50%", border: "1px solid #22c55e11",
+        top: "5%", left: "50%", transform: "translateX(-50%)",
+        pointerEvents: "none",
+      }} />
+
+      {/* Icône appli */}
+      <div className="splash-icon" style={{ marginBottom: 40 }}>
+        <img
+          src="/mon-coach/icon-192.png"
+          alt="Mon Coach"
+          style={{
+            width: 110, height: 110,
+            borderRadius: 28,
+            boxShadow: "0 0 40px #22c55e44, 0 0 80px #22c55e22",
+          }}
+        />
+      </div>
+
+      {/* Citation */}
+      <div className="splash-quote" style={{
+        maxWidth: 340, textAlign: "center", marginBottom: 48,
+      }}>
+        <div style={{
+          fontSize: 11, letterSpacing: 3, color: "#22c55e",
+          textTransform: "uppercase", marginBottom: 20,
+        }}>✦ Motivation du jour ✦</div>
+        <div style={{
+          fontSize: 20, fontWeight: 700, color: "#e2e8f0",
+          lineHeight: 1.5, fontStyle: "italic", marginBottom: 14,
+        }}>
+          "{quote.text}"
+        </div>
+        {quote.auteur && (
+          <div style={{ fontSize: 13, color: "#64748b" }}>— {quote.auteur}</div>
+        )}
+      </div>
+
+      {/* Bouton */}
+      <div className="splash-btn" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        <div style={{
+          padding: "14px 40px",
+          background: "linear-gradient(135deg,#22c55e,#16a34a)",
+          borderRadius: 50, color: "#fff",
+          fontSize: 15, fontWeight: 700,
+          boxShadow: "0 0 24px #22c55e66",
+          animation: "shimmer 2s ease infinite",
+        }}>
+          Je valide et je commence →
+        </div>
+        <div style={{ fontSize: 11, color: "#475569" }}>Appuie n'importe où pour continuer</div>
+      </div>
+    </div>
+  );
+}
+
 // ── APP ───────────────────────────────────────────────────────────────────────
 function App() {
+  const [splash, setSplash]     = useState(true);
   const [tab, setTab]           = useState("poids");
   const [data, setData]         = useState(null);
   const [syncStatus, setSyncStatus] = useState("syncing"); // ok | syncing | error
@@ -902,6 +1001,8 @@ function App() {
 
   const update = (key, val) =>
     setData(prev => ({ ...prev, [key]: typeof val === "function" ? val(prev[key]) : val }));
+
+  if (splash) return <SplashScreen onEnter={() => setSplash(false)} />;
 
   if (!data) {
     return (
