@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
   <title>Mon Coach Personnel</title>
   <meta name="theme-color" content="#0f0c29" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -121,9 +121,10 @@ const HISTORICAL_DATA = {
     ],
     streak: 6, lastDate: "2025-11-14",
     objectif: 80,
-    weeklyGoal: "Descendre sous les 90 kg",
-    weekBilan: "J'ai trop mangé le soir — Stratégie : protéine + légumes, pas de féculents le soir.",
-    aikido: "2ème Kiyu en préparation 🥋",
+    objectifLabel: "Descendre sous les 90 kg",
+    bilan: "",
+    victoires: [],
+    journal: [],
     defis: {
       sucre:      { current: 0, record: 0 },
       grignotage: { current: 0, record: 0 },
@@ -330,7 +331,7 @@ function FocusTab({ data, update, color }) {
 
   return (
     <div>
-      <CardBox color={color} title="Objectif S46">
+      <CardBox color={color} title="Mon objectif">
         {data.weeklyGoal}
         {data.weekBilan && <div style={{ fontSize: 12, color: "#94a3b8", marginTop: 6, fontWeight: 400, fontStyle: "italic" }}>💬 {data.weekBilan}</div>}
       </CardBox>
@@ -628,19 +629,87 @@ function PoidsTab({ data, update, color }) {
   const moodE     = ["", "😩", "😕", "😐", "😊", "😄"];
   const energyE   = ["", "🪫", "🔋", "⚡", "🔥", "💥"];
 
+  // Tendance basée sur les 3 dernières entrées
+  const tendance = (() => {
+    if (entries.length < 2) return null;
+    const recent = entries.slice(0, Math.min(3, entries.length));
+    const delta = recent[0].weight - recent[recent.length - 1].weight;
+    if (delta > 0.2) return { label: "↘ En baisse", color: "#22c55e" };
+    if (delta < -0.2) return { label: "↗ En hausse", color: "#ef4444" };
+    return { label: "→ Stable", color: "#94a3b8" };
+  })();
+
+  const [editObjectif, setEditObjectif] = useState(false);
+  const [editObjectifVal, setEditObjectifVal] = useState(data.objectifLabel || "");
+  const [editBilan, setEditBilan] = useState(false);
+  const [editBilanVal, setEditBilanVal] = useState(data.bilan || "");
+  const [newVictoire, setNewVictoire] = useState("");
+
   return (
     <div>
+      {/* STATS RAPIDES */}
+      <div style={{ display: "flex", gap: 8, marginBottom: 14, flexWrap: "wrap" }}>
+        {latest && <div style={{ flex: 1, background: `${color}18`, border: `1px solid ${color}33`, borderRadius: 12, padding: "12px 10px", textAlign: "center", minWidth: 72 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color }}>{latest.weight} kg</div>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Actuel</div>
+        </div>}
+        {toGoal && <div style={{ flex: 1, background: "#f9731618", border: "1px solid #f9731633", borderRadius: 12, padding: "12px 10px", textAlign: "center", minWidth: 72 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#f97316" }}>-{toGoal} kg</div>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Restant</div>
+        </div>}
+        {totalLoss && <div style={{ flex: 1, background: "#22c55e18", border: "1px solid #22c55e33", borderRadius: 12, padding: "12px 10px", textAlign: "center", minWidth: 72 }}>
+          <div style={{ fontSize: 20, fontWeight: 700, color: "#22c55e" }}>-{totalLoss} kg</div>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Perdus 🎉</div>
+        </div>}
+        {tendance && <div style={{ flex: 1, background: "#ffffff0a", border: "1px solid #ffffff11", borderRadius: 12, padding: "12px 10px", textAlign: "center", minWidth: 72 }}>
+          <div style={{ fontSize: 14, fontWeight: 700, color: tendance.color }}>{tendance.label}</div>
+          <div style={{ fontSize: 10, color: "#94a3b8", marginTop: 2 }}>Tendance</div>
+        </div>}
+      </div>
+
+      {/* OBJECTIF EDITABLE */}
       <div style={{ background: `${color}18`, border: `1px solid ${color}44`, borderRadius: 14, padding: "14px 16px", marginBottom: 14 }}>
-        <div style={{ fontSize: 10, letterSpacing: 3, color, textTransform: "uppercase", marginBottom: 6 }}>Objectif S46</div>
-        <div style={{ fontWeight: 700, fontSize: 15, marginBottom: 12 }}>{data.weeklyGoal}</div>
-        <div style={{ display: "flex", gap: 16, flexWrap: "wrap" }}>
-          {latest && <KPI label="Actuel" value={`${latest.weight} kg`} color={color} />}
-          <KPI label="Objectif" value={`${data.objectif} kg`} color="#94a3b8" />
-          {toGoal && <KPI label="Restant" value={`-${toGoal} kg`} color="#f97316" />}
-          {totalLoss && <KPI label="Perdus 🎉" value={`-${totalLoss} kg`} color={color} />}
+        <div style={{ fontSize: 10, letterSpacing: 3, color, textTransform: "uppercase", marginBottom: 8 }}>🎯 Mon objectif</div>
+        {editObjectif ? (
+          <div style={{ display: "flex", gap: 8 }}>
+            <input value={editObjectifVal} onChange={e => setEditObjectifVal(e.target.value)}
+              style={{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: `1px solid ${color}44`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
+            <button onClick={() => { update(d => ({ ...d, objectifLabel: editObjectifVal })); setEditObjectif(false); }}
+              style={{ padding: "9px 14px", background: color, border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>OK</button>
+            <button onClick={() => setEditObjectif(false)}
+              style={{ padding: "9px 10px", background: "#ffffff11", border: "none", borderRadius: 10, color: "#94a3b8", cursor: "pointer", fontSize: 16 }}>×</button>
+          </div>
+        ) : (
+          <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+            <div style={{ fontWeight: 700, fontSize: 15 }}>{data.objectifLabel || "Définir un objectif..."}</div>
+            <button onClick={() => { setEditObjectifVal(data.objectifLabel || ""); setEditObjectif(true); }}
+              style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 16 }}>✏️</button>
+          </div>
+        )}
+        <div style={{ marginTop: 10 }}>
+          {editBilan ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <input value={editBilanVal} onChange={e => setEditBilanVal(e.target.value)}
+                style={{ padding: "9px 12px", background: "#ffffff0a", border: `1px solid ${color}44`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
+              <div style={{ display: "flex", gap: 6 }}>
+                <button onClick={() => { update(d => ({ ...d, bilan: editBilanVal })); setEditBilan(false); }}
+                  style={{ flex: 1, padding: "8px", background: color, border: "none", borderRadius: 10, color: "#fff", fontSize: 12, fontWeight: 700, cursor: "pointer" }}>Enregistrer</button>
+                <button onClick={() => { update(d => ({ ...d, bilan: "" })); setEditBilan(false); setEditBilanVal(""); }}
+                  style={{ padding: "8px 12px", background: "#ef444422", border: "1px solid #ef444444", borderRadius: 10, color: "#ef4444", cursor: "pointer", fontSize: 12 }}>Supprimer</button>
+                <button onClick={() => setEditBilan(false)}
+                  style={{ padding: "8px 10px", background: "#ffffff11", border: "none", borderRadius: 10, color: "#94a3b8", cursor: "pointer" }}>×</button>
+              </div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+              {data.bilan
+                ? <div style={{ flex: 1, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>💬 {data.bilan}</div>
+                : <div style={{ flex: 1, fontSize: 12, color: "#475569", fontStyle: "italic" }}>+ Ajouter un commentaire...</div>}
+              <button onClick={() => { setEditBilanVal(data.bilan || ""); setEditBilan(true); }}
+                style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 14 }}>✏️</button>
+            </div>
+          )}
         </div>
-        <div style={{ marginTop: 10, fontSize: 12, color: "#94a3b8", fontStyle: "italic" }}>💬 {data.weekBilan}</div>
-        {data.aikido && <div style={{ marginTop: 6, fontSize: 13, color }}>🥋 {data.aikido}</div>}
       </div>
 
       <StatBar color={color} streak={data.streak} label="jours de suivi consécutifs"
@@ -705,27 +774,40 @@ function PoidsTab({ data, update, color }) {
         </div>
       )}
 
-      {entries.length > 0 && (
-        <div>
-          <Lbl>Historique</Lbl>
+      {/* JOURNAL */}
+      <JournalSection
+        journal={data.journal || []}
+        onAdd={(type, text) => update(d => ({ ...d, journal: [{ id: Date.now(), type, text, date: today() }, ...(d.journal || [])] }))}
+        onDelete={id => update(d => ({ ...d, journal: (d.journal || []).filter(j => j.id !== id) }))}
+        onEdit={(id, text) => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, text } : j) }))}
+        color={color}
+      />
+
+      {/* MES VICTOIRES */}
+      <div style={{ marginBottom: 14 }}>
+        <Lbl>🏅 Mes victoires</Lbl>
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid ${color}33` }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <input value={newVictoire} onChange={e => setNewVictoire(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && newVictoire.trim()) { update(d => ({ ...d, victoires: [{ id: Date.now(), text: newVictoire.trim(), date: today() }, ...(d.victoires || [])] })); setNewVictoire(""); } }}
+              placeholder="Ex: 3 jours sans sucre ! 🎉" style={{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: `1px solid ${color}44`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
+            <button onClick={() => { if (!newVictoire.trim()) return; update(d => ({ ...d, victoires: [{ id: Date.now(), text: newVictoire.trim(), date: today() }, ...(d.victoires || [])] })); setNewVictoire(""); }}
+              style={{ padding: "9px 14px", background: color, border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>+</button>
+          </div>
+          {(data.victoires || []).length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "6px 0" }}>Note tes petites victoires ici !</div>}
           <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-            {entries.slice(0, 10).map(e => (
-              <div key={e.id} style={{ padding: "11px 13px", background: "#ffffff0d", borderRadius: 10 }}>
-                <div style={{ display: "flex", justifyContent: "space-between" }}>
-                  <span style={{ fontWeight: 700, fontSize: 16, color }}>{e.weight} kg</span>
-                  <span style={{ fontSize: 10, color: "#475569" }}>{e.date}</span>
-                </div>
-                <div style={{ display: "flex", gap: 12, fontSize: 11, color: "#94a3b8", marginTop: 3 }}>
-                  <span>{moodE[e.mood]} {e.mood}/5</span>
-                  <span>😴 {e.sleep}h</span>
-                  <span>{energyE[e.energy]} {e.energy}/5</span>
-                </div>
-                {e.note && <div style={{ fontSize: 12, color: "#cbd5e1", fontStyle: "italic", marginTop: 3 }}>"{e.note}"</div>}
+            {(data.victoires || []).slice(0, 8).map(v => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#ffffff08", borderRadius: 8 }}>
+                <span style={{ fontSize: 16 }}>🏅</span>
+                <span style={{ flex: 1, fontSize: 13, color: "#e2e8f0" }}>{v.text}</span>
+                <span style={{ fontSize: 10, color: "#475569" }}>{v.date}</span>
+                <button onClick={() => update(d => ({ ...d, victoires: (d.victoires || []).filter(x => x.id !== v.id) }))}
+                  style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16 }}>×</button>
               </div>
             ))}
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
@@ -747,8 +829,8 @@ function ChatCoach({ tab, data, history, setHistory, activeColor, onClose, onNee
   const poids = data.poids.entries;
   const systemPrompt = `Tu es un coach personnel bienveillant, direct et motivant. Tu parles à quelqu'un qui travaille sur 3 axes : ne plus procrastiner, améliorer son anglais (intermédiaire → professionnel), et perdre du poids.
 
-Son contexte (fichier coaching S44-S46 2025) :
-- Organisation : Méthode 1-3-1. Bilan S46 : "manque de temps, difficile de tenir le programme". Priorité en cours : dossier acharnement thérapeutique (famille — contexte émotionnel difficile). Pas de système de suivi avant cet outil.
+Son contexte (historique de coaching) :
+- Organisation : Méthode 1-3-1. Bilan initial : "manque de temps, difficile de tenir le programme". Priorité en cours : dossier acharnement thérapeutique (famille — contexte émotionnel difficile). Pas de système de suivi avant cet outil.
 - Poids : Départ 93 kg (S44), actuellement ${poids[0]?.weight || "91.8"} kg, objectif 80 kg. Pratique Aïkido (prépare 2ème Kiyu). Stratégie : protéine + légumes, pas de féculents le soir. Tendance à trop manger le soir.
 - Streaks : Focus ${data.procrastination.streak}j / Poids ${data.poids.streak}j.
 - Il est à Rotterdam (Pays-Bas). Utilise l'app en continu quand il y pense.
@@ -833,94 +915,202 @@ Réponds en français. Sois concis (3-5 phrases max sauf question complexe), cha
   );
 }
 
+// ── JOURNAL SECTION ──────────────────────────────────────────────────────────
+function JournalSection({ journal, onAdd, onDelete, onEdit, color }) {
+  const [realise, setRealise] = useState("");
+  const [ameliore, setAmeliore] = useState("");
+  const [editId, setEditId] = useState(null);
+  const [editText, setEditText] = useState("");
+
+  const add = (type, val, set) => {
+    if (!val.trim()) return;
+    onAdd(type, val.trim());
+    set("");
+  };
+
+  const realises  = journal.filter(j => j.type === "realise");
+  const ameliores = journal.filter(j => j.type === "ameliore");
+
+  const entryStyle = { padding: "10px 12px", background: "#ffffff08", borderRadius: 10, marginBottom: 6 };
+  const typeColors = { realise: "#22c55e", ameliore: "#f97316" };
+
+  const renderEntries = (list, typeColor) => list.slice(0, 5).map(j => (
+    <div key={j.id} style={entryStyle}>
+      {editId === j.id ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={editText} onChange={e => setEditText(e.target.value)}
+            style={{ ...{ flex: 1, padding: "7px 10px", background: "#ffffff0a", border: `1px solid ${typeColor}44`, borderRadius: 8, color: "#e2e8f0", fontSize: 12, fontFamily: "Georgia,serif", outline: "none" } }} />
+          <button onClick={() => { onEdit(j.id, editText); setEditId(null); }}
+            style={{ padding: "7px 10px", background: typeColor, border: "none", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>OK</button>
+          <button onClick={() => setEditId(null)}
+            style={{ padding: "7px 8px", background: "#ffffff11", border: "none", borderRadius: 8, color: "#94a3b8", fontSize: 14, cursor: "pointer" }}>×</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: "#e2e8f0" }}>{j.text}</div>
+            <div style={{ fontSize: 10, color: "#475569", marginTop: 3 }}>{j.date}</div>
+          </div>
+          <button onClick={() => { setEditId(j.id); setEditText(j.text); }}
+            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 13 }}>✏️</button>
+          <button onClick={() => onDelete(j.id)}
+            style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16 }}>×</button>
+        </div>
+      )}
+    </div>
+  ));
+
+  return (
+    <div style={{ marginBottom: 14 }}>
+      <Lbl>📓 Mon journal quotidien</Lbl>
+      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+        {/* Ce que j'ai réalisé */}
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid #22c55e33` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", marginBottom: 8 }}>✅ Ce que j'ai réalisé aujourd'hui</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input value={realise} onChange={e => setRealise(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && add("realise", realise, setRealise)}
+              placeholder="Ex: J'ai fait mon check-in, 30 min de marche..." style={{ ...{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #22c55e44", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" } }} />
+            <button onClick={() => add("realise", realise, setRealise)}
+              style={{ padding: "9px 14px", background: "#22c55e", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+</button>
+          </div>
+          {renderEntries(realises, "#22c55e")}
+          {realises.length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "4px 0" }}>Note ta première réalisation !</div>}
+        </div>
+        {/* Ce que je dois améliorer */}
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid #f9731633` }}>
+          <div style={{ fontSize: 12, fontWeight: 700, color: "#f97316", marginBottom: 8 }}>🔧 Ce que je dois améliorer</div>
+          <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
+            <input value={ameliore} onChange={e => setAmeliore(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && add("ameliore", ameliore, setAmeliore)}
+              placeholder="Ex: Manger plus tôt le soir, me coucher à 23h..." style={{ ...{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #f9731644", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" } }} />
+            <button onClick={() => add("ameliore", ameliore, setAmeliore)}
+              style={{ padding: "9px 14px", background: "#f97316", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+</button>
+          </div>
+          {renderEntries(ameliores, "#f97316")}
+          {ameliores.length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "4px 0" }}>Note un axe d'amélioration !</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── SPLASH SCREEN ────────────────────────────────────────────────────────────
 const SPLASH_QUOTES = [
   { text: "La constance bat la perfection.", auteur: null },
   { text: "Tu n'as pas besoin de plus de temps, tu as besoin de plus de direction.", auteur: null },
   { text: "Aujourd'hui, je prends les rênes de ma vie.", auteur: null },
   { text: "Les petites actions répétées chaque jour créent les grandes réussites.", auteur: null },
-  { text: "La discipline est le pont entre les objectifs et la réussite.", auteur: "Jim Rohn" },
-  { text: "Le succès est la somme de petits efforts répétés jour après jour.", auteur: "Robert Collier" },
   { text: "Tu n'as pas besoin d'être parfait, seulement meilleur qu'hier.", auteur: null },
-  { text: "L'organisation libère l'esprit et révèle le potentiel.", auteur: "Stephen R. Covey" },
   { text: "Préfère la régularité à la quantité. 10 minutes par jour changent tout.", auteur: null },
   { text: "Chaque soir : noter 1 succès + 1 chose à améliorer.", auteur: null },
+  { text: "La procrastination est le voleur du temps. Commence maintenant, même imparfaitement.", auteur: null },
+  { text: "Tu n'as pas à voir tout l'escalier. Il suffit de gravir la première marche.", auteur: "Martin Luther King" },
+  { text: "Faire une seule chose importante vaut mieux que dix choses urgentes.", auteur: null },
+  { text: "L'action chasse la peur. La réflexion sans action la nourrit.", auteur: null },
+  { text: "Ce que tu remets à demain, tu l'auras deux fois à faire.", auteur: null },
+  { text: "La meilleure façon de manger un éléphant ? Une bouchée à la fois.", auteur: null },
+  { text: "Un objectif sans plan n'est qu'un souhait. Un plan sans action n'est qu'un rêve.", auteur: null },
+  { text: "Commence par le plus difficile. Le reste de la journée sera plus léger.", auteur: null },
+  { text: "La clarté sur une seule priorité vaut plus que la confusion sur dix.", auteur: null },
+  { text: "Capture tout ce qui retient ton attention. Un esprit vide est un esprit libre.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Chaque jour, identifie ta seule tâche la plus importante. Fais-la en premier.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Simplifie. Moins tu as d'engagements, plus tu peux te concentrer sur ce qui compte.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Les habitudes ne se créent pas par la volonté, mais par la répétition quotidienne.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Fais moins, mais fais-le mieux. La productivité n'est pas une course à la quantité.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Le présent est le seul moment où l'action est possible. Sois là, entièrement.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Crée des routines. Elles transforment les bonnes décisions en réflexes automatiques.", auteur: "Léo Babauta — Zen To Done" },
+  { text: "Soyez proactif. Vous êtes responsable de votre vie — personne d'autre.", auteur: "Stephen R. Covey" },
+  { text: "Commencez avec la fin en tête. Savoir où vous allez, c'est déjà y être à moitié.", auteur: "Stephen R. Covey" },
+  { text: "Faites d'abord ce qui doit être fait. L'urgence est l'ennemie de l'importance.", auteur: "Stephen R. Covey" },
+  { text: "Cherchez d'abord à comprendre, puis à être compris.", auteur: "Stephen R. Covey" },
+  { text: "Aiguisez la scie. Prenez soin de vous : corps, esprit, cœur et âme.", auteur: "Stephen R. Covey" },
+  { text: "L'organisation libère l'esprit et révèle le potentiel.", auteur: "Stephen R. Covey" },
+  { text: "La discipline est le pont entre les objectifs et la réussite.", auteur: "Jim Rohn" },
+  { text: "Le succès est la somme de petits efforts répétés jour après jour.", auteur: "Robert Collier" },
 ];
 
 function SplashScreen({ onEnter }) {
-  const quote = SPLASH_QUOTES[Math.floor(Math.random() * SPLASH_QUOTES.length)];
+  const [idx, setIdx] = useState(() => Math.floor(Math.random() * SPLASH_QUOTES.length));
+  const quote = SPLASH_QUOTES[idx];
+  const prev = (e) => { e.stopPropagation(); setIdx(i => (i - 1 + SPLASH_QUOTES.length) % SPLASH_QUOTES.length); };
+  const next = (e) => { e.stopPropagation(); setIdx(i => (i + 1) % SPLASH_QUOTES.length); };
+
   return (
-    <div
-      onClick={onEnter}
-      style={{
-        minHeight: "100vh", minHeight: "100dvh",
-        background: "linear-gradient(135deg,#0f0c29 0%,#1a1a2e 50%,#16213e 100%)",
-        display: "flex", flexDirection: "column",
-        alignItems: "center", justifyContent: "center",
-        padding: 32, cursor: "pointer", userSelect: "none",
-        position: "relative", overflow: "hidden",
-      }}
-    >
-      {/* Cercles décoratifs en fond */}
-      <div style={{
-        position: "absolute", width: 300, height: 300,
-        borderRadius: "50%", border: "1px solid #22c55e22",
-        top: "10%", left: "50%", transform: "translateX(-50%)",
-        pointerEvents: "none",
-      }} />
-      <div style={{
-        position: "absolute", width: 500, height: 500,
-        borderRadius: "50%", border: "1px solid #22c55e11",
-        top: "5%", left: "50%", transform: "translateX(-50%)",
-        pointerEvents: "none",
-      }} />
+    <div style={{
+      minHeight: "100vh", minHeight: "100dvh",
+      background: "linear-gradient(135deg,#0f0c29 0%,#1a1a2e 50%,#16213e 100%)",
+      display: "flex", flexDirection: "column",
+      alignItems: "center", justifyContent: "center",
+      padding: 32, userSelect: "none",
+      position: "relative", overflow: "hidden",
+    }}>
+      {/* Cercles décoratifs */}
+      <div style={{ position: "absolute", width: 300, height: 300, borderRadius: "50%", border: "1px solid #22c55e22", top: "10%", left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
+      <div style={{ position: "absolute", width: 500, height: 500, borderRadius: "50%", border: "1px solid #22c55e11", top: "5%", left: "50%", transform: "translateX(-50%)", pointerEvents: "none" }} />
 
-      {/* Icône appli */}
-      <div className="splash-icon" style={{ marginBottom: 40 }}>
-        <img
-          src="data:image/png;base64,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"
-          alt="Mon Coach"
-          style={{
-            width: 110, height: 110,
-            borderRadius: 28,
-            boxShadow: "0 0 40px #22c55e44, 0 0 80px #22c55e22",
-          }}
-        />
+      {/* Icône */}
+      <div className="splash-icon" style={{ marginBottom: 36 }}>
+        <img src="/mon-coach/icon-192.png" alt="Mon Coach" style={{ width: 110, height: 110, borderRadius: 28, boxShadow: "0 0 40px #22c55e44, 0 0 80px #22c55e22" }} />
       </div>
 
-      {/* Citation */}
-      <div className="splash-quote" style={{
-        maxWidth: 340, textAlign: "center", marginBottom: 48,
-      }}>
-        <div style={{
-          fontSize: 11, letterSpacing: 3, color: "#22c55e",
-          textTransform: "uppercase", marginBottom: 20,
-        }}>✦ Motivation du jour ✦</div>
-        <div style={{
-          fontSize: 20, fontWeight: 700, color: "#e2e8f0",
-          lineHeight: 1.5, fontStyle: "italic", marginBottom: 14,
-        }}>
-          "{quote.text}"
+      {/* Citation + navigation */}
+      <div style={{ maxWidth: 340, textAlign: "center", marginBottom: 40 }}>
+        <div style={{ fontSize: 11, letterSpacing: 3, color: "#22c55e", textTransform: "uppercase", marginBottom: 20 }}>✦ Motivation du jour ✦</div>
+
+        {/* Flèches + texte */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+          <button onClick={prev} style={{
+            background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: 50,
+            width: 40, height: 40, fontSize: 18, color: "#94a3b8", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            transition: "all .2s",
+          }}>‹</button>
+
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#e2e8f0", lineHeight: 1.55, fontStyle: "italic" }}>
+              "{quote.text}"
+            </div>
+            {quote.auteur && (
+              <div style={{ fontSize: 12, color: "#64748b", marginTop: 10 }}>— {quote.auteur}</div>
+            )}
+          </div>
+
+          <button onClick={next} style={{
+            background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: 50,
+            width: 40, height: 40, fontSize: 18, color: "#94a3b8", cursor: "pointer",
+            display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0,
+            transition: "all .2s",
+          }}>›</button>
         </div>
-        {quote.auteur && (
-          <div style={{ fontSize: 13, color: "#64748b" }}>— {quote.auteur}</div>
-        )}
+
+        {/* Indicateur de position */}
+        <div style={{ display: "flex", justifyContent: "center", gap: 4 }}>
+          {SPLASH_QUOTES.map((_, i) => (
+            <div key={i} onClick={(e) => { e.stopPropagation(); setIdx(i); }} style={{
+              width: i === idx ? 16 : 6, height: 6, borderRadius: 3,
+              background: i === idx ? "#22c55e" : "#ffffff22",
+              transition: "all .3s", cursor: "pointer",
+            }} />
+          ))}
+        </div>
       </div>
 
-      {/* Bouton */}
-      <div className="splash-btn" style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
-        <div style={{
-          padding: "14px 40px",
+      {/* Bouton lancer */}
+      <button
+        onClick={onEnter}
+        style={{
+          padding: "14px 44px",
           background: "linear-gradient(135deg,#22c55e,#16a34a)",
-          borderRadius: 50, color: "#fff",
-          fontSize: 15, fontWeight: 700,
+          border: "none", borderRadius: 50, color: "#fff",
+          fontSize: 15, fontWeight: 700, cursor: "pointer",
+          fontFamily: "Georgia,serif",
           boxShadow: "0 0 24px #22c55e66",
-          animation: "shimmer 2s ease infinite",
-        }}>
-          Je valide et je commence →
-        </div>
-        <div style={{ fontSize: 11, color: "#475569" }}>Appuie n'importe où pour continuer</div>
-      </div>
+        }}
+      >
+        Je valide et je commence →
+      </button>
+      <div style={{ fontSize: 11, color: "#475569", marginTop: 10 }}>{idx + 1} / {SPLASH_QUOTES.length}</div>
     </div>
   );
 }
@@ -964,7 +1154,7 @@ function App() {
           const w = rows.poids || {};
           setData({
             procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras },
-            poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries, defis: w.defis || defaults.poids.defis },
+            poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries, defis: w.defis || defaults.poids.defis, journal: w.journal || [], victoires: w.victoires || [], objectifLabel: w.objectifLabel || defaults.poids.objectifLabel, bilan: w.bilan || '' },
             chatHistory: rows.chat_history || [],
           });
         }
@@ -1033,7 +1223,7 @@ function App() {
           <div style={{ display: "flex", alignItems: "center", gap: 6, marginBottom: 3 }}>
             <span className={`sync-dot ${syncStatus}`} style={{ background: syncColors[syncStatus] }} />
             <span style={{ fontSize: 9, letterSpacing: 2, color: "#94a3b8", textTransform: "uppercase" }}>
-              {syncLabels[syncStatus]} · S44 2025
+              {syncLabels[syncStatus]} 
             </span>
           </div>
           <h1 style={{
