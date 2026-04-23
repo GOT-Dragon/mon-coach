@@ -62,6 +62,7 @@ const HISTORICAL_DATA = {
     streak: 0, lastDate: null,
     weeklyGoal: "Dossier acharnement thérapeutique",
     weekBilan: "Je n'arrive pas à tenir le programme — Fixer 1 seule priorité par jour.",
+    journal: [],
     mantras: [
       "La constance bat la perfection.",
       "Tu n'as pas besoin de plus de temps, tu as besoin de plus de direction.",
@@ -363,7 +364,7 @@ function FocusTab({ data, update, color }) {
       </SectionBox>
 
       {data.tasks.length === 0 && <Empty emoji="✅" text="Ajoute ta première priorité du jour !" />}
-      <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 8, marginBottom: 20 }}>
         {[...pending, ...done].map(t => (
           <div key={t.id} style={{
             display: "flex", alignItems: "flex-start", gap: 10, padding: "12px 14px",
@@ -385,6 +386,16 @@ function FocusTab({ data, update, color }) {
           </div>
         ))}
       </div>
+
+      {/* JOURNAL FOCUS */}
+      <JournalSection
+        journal={data.journal || []}
+        onAdd={(type, text) => update(d => ({ ...d, journal: [{ id: Date.now(), type, text, done: false, date: today() }, ...(d.journal || [])] }))}
+        onDelete={id => update(d => ({ ...d, journal: (d.journal || []).filter(j => j.id !== id) }))}
+        onEdit={(id, text) => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, text } : j) }))}
+        onToggleDone={id => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, done: !j.done } : j) }))}
+        color={color}
+      />
     </div>
   );
 }
@@ -1202,7 +1213,7 @@ function App() {
           const p = rows.procrastination || {};
           const w = rows.poids || {};
           setData({
-            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras },
+            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras, journal: p.journal || [] },
             poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries, defis: w.defis || defaults.poids.defis, journal: w.journal || [], victoires: w.victoires || [], objectifLabel: w.objectifLabel || defaults.poids.objectifLabel, bilan: w.bilan || '' },
             chatHistory: rows.chat_history || [],
           });
