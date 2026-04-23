@@ -2,7 +2,7 @@
 <html lang="fr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Mon Coach Personnel</title>
   <meta name="theme-color" content="#0f0c29" />
   <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -633,9 +633,12 @@ function PoidsTab({ data, update, color }) {
   const tendance = (() => {
     if (entries.length < 2) return null;
     const recent = entries.slice(0, Math.min(3, entries.length));
+    // entries[0] = le plus récent, entries[last] = le plus ancien
+    // delta positif = poids récent > ancien = EN HAUSSE (mauvais)
+    // delta négatif = poids récent < ancien = EN BAISSE (bon)
     const delta = recent[0].weight - recent[recent.length - 1].weight;
-    if (delta > 0.2) return { label: "↘ En baisse", color: "#22c55e" };
-    if (delta < -0.2) return { label: "↗ En hausse", color: "#ef4444" };
+    if (delta < -0.2) return { label: "↘ En baisse", color: "#22c55e" };
+    if (delta > 0.2)  return { label: "↗ En hausse", color: "#ef4444" };
     return { label: "→ Stable", color: "#94a3b8" };
   })();
 
@@ -777,9 +780,10 @@ function PoidsTab({ data, update, color }) {
       {/* JOURNAL */}
       <JournalSection
         journal={data.journal || []}
-        onAdd={(type, text) => update(d => ({ ...d, journal: [{ id: Date.now(), type, text, date: today() }, ...(d.journal || [])] }))}
+        onAdd={(type, text) => update(d => ({ ...d, journal: [{ id: Date.now(), type, text, done: false, date: today() }, ...(d.journal || [])] }))}
         onDelete={id => update(d => ({ ...d, journal: (d.journal || []).filter(j => j.id !== id) }))}
         onEdit={(id, text) => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, text } : j) }))}
+        onToggleDone={id => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, done: !j.done } : j) }))}
         color={color}
       />
 
@@ -916,7 +920,7 @@ Réponds en français. Sois concis (3-5 phrases max sauf question complexe), cha
 }
 
 // ── JOURNAL SECTION ──────────────────────────────────────────────────────────
-function JournalSection({ journal, onAdd, onDelete, onEdit, color }) {
+function JournalSection({ journal, onAdd, onDelete, onEdit, onToggleDone, color }) {
   const [realise, setRealise] = useState("");
   const [ameliore, setAmeliore] = useState("");
   const [editId, setEditId] = useState(null);
@@ -932,16 +936,15 @@ function JournalSection({ journal, onAdd, onDelete, onEdit, color }) {
   const ameliores = journal.filter(j => j.type === "ameliore");
 
   const entryStyle = { padding: "10px 12px", background: "#ffffff08", borderRadius: 10, marginBottom: 6 };
-  const typeColors = { realise: "#22c55e", ameliore: "#f97316" };
 
-  const renderEntries = (list, typeColor) => list.slice(0, 5).map(j => (
+  const renderRealises = (list) => list.slice(0, 5).map(j => (
     <div key={j.id} style={entryStyle}>
       {editId === j.id ? (
         <div style={{ display: "flex", gap: 6 }}>
           <input value={editText} onChange={e => setEditText(e.target.value)}
-            style={{ ...{ flex: 1, padding: "7px 10px", background: "#ffffff0a", border: `1px solid ${typeColor}44`, borderRadius: 8, color: "#e2e8f0", fontSize: 12, fontFamily: "Georgia,serif", outline: "none" } }} />
+            style={{ flex: 1, padding: "7px 10px", background: "#ffffff0a", border: "1px solid #22c55e44", borderRadius: 8, color: "#e2e8f0", fontSize: 12, fontFamily: "Georgia,serif", outline: "none" }} />
           <button onClick={() => { onEdit(j.id, editText); setEditId(null); }}
-            style={{ padding: "7px 10px", background: typeColor, border: "none", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>OK</button>
+            style={{ padding: "7px 10px", background: "#22c55e", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>OK</button>
           <button onClick={() => setEditId(null)}
             style={{ padding: "7px 8px", background: "#ffffff11", border: "none", borderRadius: 8, color: "#94a3b8", fontSize: 14, cursor: "pointer" }}>×</button>
         </div>
@@ -960,34 +963,80 @@ function JournalSection({ journal, onAdd, onDelete, onEdit, color }) {
     </div>
   ));
 
+  const renderAmeliores = (list) => list.slice(0, 5).map(j => (
+    <div key={j.id} style={{
+      ...entryStyle,
+      border: `1px solid ${j.done ? "#22c55e33" : "#f9731622"}`,
+      opacity: j.done ? 0.65 : 1,
+    }}>
+      {editId === j.id ? (
+        <div style={{ display: "flex", gap: 6 }}>
+          <input value={editText} onChange={e => setEditText(e.target.value)}
+            style={{ flex: 1, padding: "7px 10px", background: "#ffffff0a", border: "1px solid #f9731644", borderRadius: 8, color: "#e2e8f0", fontSize: 12, fontFamily: "Georgia,serif", outline: "none" }} />
+          <button onClick={() => { onEdit(j.id, editText); setEditId(null); }}
+            style={{ padding: "7px 10px", background: "#f97316", border: "none", borderRadius: 8, color: "#fff", fontSize: 11, cursor: "pointer" }}>OK</button>
+          <button onClick={() => setEditId(null)}
+            style={{ padding: "7px 8px", background: "#ffffff11", border: "none", borderRadius: 8, color: "#94a3b8", fontSize: 14, cursor: "pointer" }}>×</button>
+        </div>
+      ) : (
+        <div style={{ display: "flex", alignItems: "flex-start", gap: 8 }}>
+          {/* Bouton statut fait/pas fait */}
+          <button onClick={() => onToggleDone(j.id)} style={{
+            width: 22, height: 22, borderRadius: 50, flexShrink: 0, marginTop: 1,
+            border: `2px solid ${j.done ? "#22c55e" : "#f97316"}`,
+            background: j.done ? "#22c55e" : "transparent",
+            cursor: "pointer", fontSize: 10,
+            display: "flex", alignItems: "center", justifyContent: "center", color: "#fff",
+          }}>{j.done ? "✓" : ""}</button>
+          <div style={{ flex: 1 }}>
+            <div style={{ fontSize: 13, color: "#e2e8f0", textDecoration: j.done ? "line-through" : "none" }}>{j.text}</div>
+            <div style={{ display: "flex", gap: 8, marginTop: 3, alignItems: "center" }}>
+              <span style={{ fontSize: 10, color: "#475569" }}>{j.date}</span>
+              <span style={{
+                fontSize: 10, fontWeight: 700,
+                color: j.done ? "#22c55e" : "#f97316",
+              }}>{j.done ? "✅ Fait" : "⏳ En cours"}</span>
+            </div>
+          </div>
+          <button onClick={() => { setEditId(j.id); setEditText(j.text); }}
+            style={{ background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 13 }}>✏️</button>
+          <button onClick={() => onDelete(j.id)}
+            style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16 }}>×</button>
+        </div>
+      )}
+    </div>
+  ));
+
   return (
     <div style={{ marginBottom: 14 }}>
       <Lbl>📓 Mon journal quotidien</Lbl>
       <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
         {/* Ce que j'ai réalisé */}
-        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid #22c55e33` }}>
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: "1px solid #22c55e33" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#22c55e", marginBottom: 8 }}>✅ Ce que j'ai réalisé aujourd'hui</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input value={realise} onChange={e => setRealise(e.target.value)}
               onKeyDown={e => e.key === "Enter" && add("realise", realise, setRealise)}
-              placeholder="Ex: J'ai fait mon check-in, 30 min de marche..." style={{ ...{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #22c55e44", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" } }} />
+              placeholder="Ex: J'ai fait mon check-in, 30 min de marche..."
+              style={{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #22c55e44", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
             <button onClick={() => add("realise", realise, setRealise)}
               style={{ padding: "9px 14px", background: "#22c55e", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+</button>
           </div>
-          {renderEntries(realises, "#22c55e")}
+          {renderRealises(realises)}
           {realises.length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "4px 0" }}>Note ta première réalisation !</div>}
         </div>
         {/* Ce que je dois améliorer */}
-        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid #f9731633` }}>
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: "1px solid #f9731633" }}>
           <div style={{ fontSize: 12, fontWeight: 700, color: "#f97316", marginBottom: 8 }}>🔧 Ce que je dois améliorer</div>
           <div style={{ display: "flex", gap: 8, marginBottom: 8 }}>
             <input value={ameliore} onChange={e => setAmeliore(e.target.value)}
               onKeyDown={e => e.key === "Enter" && add("ameliore", ameliore, setAmeliore)}
-              placeholder="Ex: Manger plus tôt le soir, me coucher à 23h..." style={{ ...{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #f9731644", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" } }} />
+              placeholder="Ex: Manger plus tôt le soir, me coucher à 23h..."
+              style={{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: "1px solid #f9731644", borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
             <button onClick={() => add("ameliore", ameliore, setAmeliore)}
               style={{ padding: "9px 14px", background: "#f97316", border: "none", borderRadius: 10, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" }}>+</button>
           </div>
-          {renderEntries(ameliores, "#f97316")}
+          {renderAmeliores(ameliores)}
           {ameliores.length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "4px 0" }}>Note un axe d'amélioration !</div>}
         </div>
       </div>
