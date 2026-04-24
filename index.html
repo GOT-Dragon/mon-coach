@@ -63,6 +63,7 @@ const HISTORICAL_DATA = {
     weeklyGoal: "Dossier acharnement thérapeutique",
     weekBilan: "Je n'arrive pas à tenir le programme — Fixer 1 seule priorité par jour.",
     journal: [],
+    victoires: [],
     mantras: [
       "La constance bat la perfection.",
       "Tu n'as pas besoin de plus de temps, tu as besoin de plus de direction.",
@@ -324,6 +325,7 @@ function FocusTab({ data, update, color }) {
   });
   const del = id => update(d => ({ ...d, tasks: d.tasks.filter(t => t.id !== id) }));
 
+  const [newVictoire, setNewVictoire] = useState("");
   const pending  = data.tasks.filter(t => !t.done);
   const done     = data.tasks.filter(t => t.done);
   const progress = data.tasks.length > 0 ? Math.round((done.length / data.tasks.length) * 100) : 0;
@@ -396,6 +398,33 @@ function FocusTab({ data, update, color }) {
         onToggleDone={id => update(d => ({ ...d, journal: (d.journal || []).map(j => j.id === id ? { ...j, done: !j.done } : j) }))}
         color={color}
       />
+
+      {/* MES VICTOIRES FOCUS */}
+      <div style={{ marginBottom: 14 }}>
+        <Lbl>🏅 Mes victoires</Lbl>
+        <div style={{ background: "#ffffff0a", borderRadius: 14, padding: 14, border: `1px solid ${color}33` }}>
+          <div style={{ display: "flex", gap: 8, marginBottom: 10 }}>
+            <input value={newVictoire} onChange={e => setNewVictoire(e.target.value)}
+              onKeyDown={e => { if (e.key === "Enter" && newVictoire.trim()) { update(d => ({ ...d, victoires: [{ id: Date.now(), text: newVictoire.trim(), date: today() }, ...(d.victoires || [])] })); setNewVictoire(""); } }}
+              placeholder="Ex: J'ai terminé ma tâche prioritaire ! 🎉"
+              style={{ flex: 1, padding: "9px 12px", background: "#ffffff0a", border: `1px solid ${color}44`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "Georgia,serif", outline: "none" }} />
+            <button onClick={() => { if (!newVictoire.trim()) return; update(d => ({ ...d, victoires: [{ id: Date.now(), text: newVictoire.trim(), date: today() }, ...(d.victoires || [])] })); setNewVictoire(""); }}
+              style={{ padding: "9px 14px", background: color, border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer" }}>+</button>
+          </div>
+          {(data.victoires || []).length === 0 && <div style={{ fontSize: 12, color: "#475569", textAlign: "center", padding: "6px 0" }}>Note tes petites victoires ici !</div>}
+          <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+            {(data.victoires || []).slice(0, 8).map(v => (
+              <div key={v.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 10px", background: "#ffffff08", borderRadius: 8 }}>
+                <span style={{ fontSize: 16 }}>🏅</span>
+                <span style={{ flex: 1, fontSize: 13, color: "#e2e8f0" }}>{v.text}</span>
+                <span style={{ fontSize: 10, color: "#475569" }}>{v.date}</span>
+                <button onClick={() => update(d => ({ ...d, victoires: (d.victoires || []).filter(x => x.id !== v.id) }))}
+                  style={{ background: "none", border: "none", color: "#475569", cursor: "pointer", fontSize: 16 }}>×</button>
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
     </div>
   );
 }
@@ -605,14 +634,11 @@ function DefiCard({ defi, onTenu, onReset, onSetManual, color }) {
 // ── POIDS TAB ─────────────────────────────────────────────────────────────────
 function PoidsTab({ data, update, color }) {
   const [weight, setWeight] = useState("");
-  const [mood, setMood]     = useState(4);
-  const [sleep, setSleep]   = useState(7);
-  const [energy, setEnergy] = useState(4);
   const [note, setNote]     = useState("");
 
   const addEntry = () => {
     if (!weight) return;
-    const e = { id: Date.now(), weight: Number(weight), mood, sleep, energy, note: note.trim(), date: today() };
+    const e = { id: Date.now(), weight: Number(weight), note: note.trim(), date: today() };
     const isNew = data.lastDate !== today();
     update(d => ({ ...d, entries: [e, ...d.entries], streak: isNew ? d.streak + 1 : d.streak, lastDate: today() }));
     setWeight(""); setNote("");
@@ -637,8 +663,7 @@ function PoidsTab({ data, update, color }) {
   const diff      = latest && prev ? (latest.weight - prev.weight).toFixed(1) : null;
   const totalLoss = entries.length > 1 ? (entries[entries.length - 1].weight - latest.weight).toFixed(1) : null;
   const toGoal    = latest ? (latest.weight - data.objectif).toFixed(1) : null;
-  const moodE     = ["", "😩", "😕", "😐", "😊", "😄"];
-  const energyE   = ["", "🪫", "🔋", "⚡", "🔥", "💥"];
+
 
   // Tendance basée sur les 3 dernières entrées
   const tendance = (() => {
@@ -739,9 +764,6 @@ function PoidsTab({ data, update, color }) {
               style={{ ...inp(color), maxWidth: 150 }} />
             <span style={{ color: "#94a3b8" }}>kg</span>
           </div>
-          <SliderRow label={`Humeur ${moodE[mood]}`}       value={mood}   set={setMood}   min={1} max={5}  color={color} />
-          <SliderRow label={`Sommeil ${sleep}h`}            value={sleep}  set={setSleep}  min={4} max={12} color={color} />
-          <SliderRow label={`Énergie ${energyE[energy]}`}   value={energy} set={setEnergy} min={1} max={5}  color={color} />
           <input value={note} onChange={e => setNote(e.target.value)}
             placeholder="Note du jour — repas, sport..." style={inp(color)} />
           <button onClick={addEntry} style={{ ...btn(color), width: "100%" }}>Enregistrer mon check-in</button>
@@ -1213,7 +1235,7 @@ function App() {
           const p = rows.procrastination || {};
           const w = rows.poids || {};
           setData({
-            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras, journal: p.journal || [] },
+            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras, journal: p.journal || [], victoires: p.victoires || [] },
             poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries, defis: w.defis || defaults.poids.defis, journal: w.journal || [], victoires: w.victoires || [], objectifLabel: w.objectifLabel || defaults.poids.objectifLabel, bilan: w.bilan || '' },
             chatHistory: rows.chat_history || [],
           });
