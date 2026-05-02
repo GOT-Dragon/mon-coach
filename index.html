@@ -222,54 +222,137 @@ function KPI({ label, value, color }) {
 
 function MiniChart({ entries, color, objectif }) {
   if (entries.length < 2) return null;
+  const [tooltip, setTooltip] = useState(null); // { x, y, weight, date }
+
+  const fmtDate = d => { const p = d.split("-"); return `${p[2]}/${p[1]}/${p[0]}`; };
+  const fmtShort = d => { const p = d.split("-"); return `${p[2]}/${p[1]}`; };
+
   const weights = entries.map(e => e.weight);
-  const seuils = [90, 85];
-  const minW = Math.min(...weights, objectif, ...seuils) - 1;
+  const dates   = entries.map(e => e.date);
+  const n       = entries.length;
+
+  const PAD_L = 36, PAD_R = 10, PAD_T = 22, PAD_B = 32;
+  const W = 320, H = 160;
+  const CW = W - PAD_L - PAD_R;
+  const CH = H - PAD_T - PAD_B;
+
+  const minW = Math.min(...weights, objectif, 85, 90) - 1;
   const maxW = Math.max(...weights) + 2;
-  const W = 300, H = 110;
-  const toY = w => H - ((w - minW) / (maxW - minW)) * H;
-  const pts  = weights.map((w, i) => ({ x: (i / (weights.length - 1)) * W, y: toY(w) }));
-  const path = pts.map((p, i) => `${i === 0 ? "M" : "L"}${p.x},${p.y}`).join(" ");
-  const goalY  = toY(objectif);
-  const y90    = toY(90);
-  const y85    = toY(85);
+
+  const toX = i => PAD_L + (i / (n - 1)) * CW;
+  const toY = w => PAD_T + CH - ((w - minW) / (maxW - minW)) * CH;
+
+  const pts  = weights.map((w, i) => ({ x: toX(i), y: toY(w) }));
+  const path = pts.map((p, i) => {
+    if (i === 0) return `M${p.x},${p.y}`;
+    const prev = pts[i - 1];
+    const cx = (prev.x + p.x) / 2;
+    return `C${cx},${prev.y} ${cx},${p.y} ${p.x},${p.y}`;
+  }).join(" ");
+
+  const goalY = toY(objectif);
+  const y90   = toY(90);
+  const y85   = toY(85);
+
+  const maxLabels = 6;
+  const step = Math.max(1, Math.ceil(n / maxLabels));
+  const showDate = i => i === 0 || i === n - 1 || i % step === 0;
+  const labelAbove = i => i % 2 === 0;
+
+  const handlePoint = (i, e) => {
+    e.stopPropagation();
+    setTooltip(tooltip?.i === i ? null : { i, x: pts[i].x, y: pts[i].y, weight: weights[i], date: dates[i] });
+  };
+
   return (
-    <div style={{ background: "#ffffff0a", borderRadius: 12, padding: "12px 16px" }}>
+    <div style={{ background: "#ffffff0a", borderRadius: 14, padding: "14px 10px 10px", position: "relative" }}
+      onClick={() => setTooltip(null)}>
       <svg width="100%" viewBox={`0 0 ${W} ${H}`} style={{ display: "block", overflow: "visible" }}>
-        {/* Ligne objectif 80 kg */}
-        <line x1={0} y1={goalY} x2={W} y2={goalY} stroke="#22c55e" strokeWidth={1} strokeDasharray="4,3" opacity={0.6} />
-        <text x={W - 2} y={goalY - 3} fill="#22c55e" fontSize="8" textAnchor="end" opacity={0.8}>{objectif} kg</text>
-        {/* Seuil 85 kg */}
-        <line x1={0} y1={y85} x2={W} y2={y85} stroke="#3b82f6" strokeWidth={1} strokeDasharray="3,3" opacity={0.6} />
-        <text x={W - 2} y={y85 - 3} fill="#3b82f6" fontSize="8" textAnchor="end" opacity={0.8}>85 kg</text>
-        {/* Seuil 90 kg */}
-        <line x1={0} y1={y90} x2={W} y2={y90} stroke="#f97316" strokeWidth={1} strokeDasharray="3,3" opacity={0.6} />
-        <text x={W - 2} y={y90 - 3} fill="#f97316" fontSize="8" textAnchor="end" opacity={0.8}>90 kg</text>
-        {/* Courbe de poids */}
+
+        {/* Grille */}
+        {[minW + 1, 85, 90, objectif, maxW - 1].filter((v, i, a) => a.indexOf(v) === i).map((v, i) => (
+          <line key={i} x1={PAD_L} y1={toY(v)} x2={W - PAD_R} y2={toY(v)} stroke="#ffffff08" strokeWidth={1} />
+        ))}
+
+        {/* Axe Y labels */}
+        {[objectif, 85, 90].map((v, i) => (
+          <text key={i} x={PAD_L - 4} y={toY(v) + 3} fill="#64748b" fontSize="8" textAnchor="end">{v}</text>
+        ))}
+
+        {/* Lignes seuils */}
+        <line x1={PAD_L} y1={goalY} x2={W - PAD_R} y2={goalY} stroke="#22c55e" strokeWidth={1} strokeDasharray="5,3" opacity={0.7} />
+        <line x1={PAD_L} y1={y85}   x2={W - PAD_R} y2={y85}   stroke="#3b82f6" strokeWidth={1} strokeDasharray="3,3" opacity={0.6} />
+        <line x1={PAD_L} y1={y90}   x2={W - PAD_R} y2={y90}   stroke="#f97316" strokeWidth={1} strokeDasharray="3,3" opacity={0.6} />
+
+        {/* Dégradé sous courbe */}
+        <defs>
+          <linearGradient id="chartGrad" x1="0" y1="0" x2="0" y2="1">
+            <stop offset="0%" stopColor={color} stopOpacity="0.25" />
+            <stop offset="100%" stopColor={color} stopOpacity="0.02" />
+          </linearGradient>
+        </defs>
+        <path d={path + ` L${pts[n-1].x},${PAD_T+CH} L${pts[0].x},${PAD_T+CH} Z`} fill="url(#chartGrad)" />
+
+        {/* Courbe */}
         <path d={path} fill="none" stroke={color} strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round" />
-        {/* Points avec étiquettes de poids */}
+
+        {/* Points cliquables */}
         {pts.map((p, i) => (
-          <g key={i}>
-            <circle cx={p.x} cy={p.y} r={4} fill={color} />
-            <text
-              x={p.x}
-              y={p.y - 8}
-              fill={color}
-              fontSize="8"
-              textAnchor="middle"
-              fontWeight="700"
+          <g key={i} onClick={e => handlePoint(i, e)} style={{ cursor: "pointer" }}>
+            {/* Zone de touch élargie invisible */}
+            <circle cx={p.x} cy={p.y} r={16} fill="transparent" />
+            {/* Point visible */}
+            <circle cx={p.x} cy={p.y} r={tooltip?.i === i ? 6 : 4} fill={color}
+              stroke={tooltip?.i === i ? "#fff" : "#16213e"} strokeWidth={1.5} />
+            {/* Label poids */}
+            <text x={p.x} y={labelAbove(i) ? p.y - 9 : p.y + 16}
+              fill={tooltip?.i === i ? "#fff" : color}
+              fontSize="8" textAnchor="middle" fontWeight="700"
             >{weights[i]}</text>
           </g>
         ))}
+
+        {/* Dates axe X */}
+        {pts.map((p, i) => showDate(i) && (
+          <text key={i} x={p.x} y={H - 4} fill="#64748b" fontSize="7.5" textAnchor="middle">{fmtShort(dates[i])}</text>
+        ))}
+
+        {/* Axe X */}
+        <line x1={PAD_L} y1={PAD_T + CH} x2={W - PAD_R} y2={PAD_T + CH} stroke="#ffffff15" strokeWidth={1} />
+
+        {/* Tooltip SVG */}
+        {tooltip && (() => {
+          const tx = Math.min(Math.max(tooltip.x, 50), W - 50);
+          const ty = tooltip.y < PAD_T + 40 ? tooltip.y + 20 : tooltip.y - 42;
+          return (
+            <g>
+              <rect x={tx - 46} y={ty} width={92} height={30} rx={6}
+                fill="#1e293b" stroke={color} strokeWidth={1} opacity={0.97} />
+              <text x={tx} y={ty + 12} fill={color} fontSize="9" textAnchor="middle" fontWeight="700">
+                {tooltip.weight} kg
+              </text>
+              <text x={tx} y={ty + 24} fill="#94a3b8" fontSize="8" textAnchor="middle">
+                {fmtDate(tooltip.date)}
+              </text>
+            </g>
+          );
+        })()}
       </svg>
-      <div style={{ display: "flex", justifyContent: "space-between", fontSize: 10, color: "#475569", marginTop: 4 }}>
-        <span>{entries[0]?.date}</span><span>{entries[entries.length - 1]?.date}</span>
-      </div>
+
       {/* Légende */}
-      <div style={{ display: "flex", gap: 12, marginTop: 8, flexWrap: "wrap" }}>
-        <span style={{ fontSize: 10, color: "#f97316" }}>— 90 kg</span>
-        <span style={{ fontSize: 10, color: "#3b82f6" }}>— 85 kg</span>
-        <span style={{ fontSize: 10, color: "#22c55e" }}>— {objectif} kg (objectif)</span>
+      <div style={{ display: "flex", gap: 14, marginTop: 6, flexWrap: "wrap", justifyContent: "center" }}>
+        <span style={{ fontSize: 10, color: "#f97316", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 16, height: 1.5, background: "#f97316", verticalAlign: "middle" }} /> 90 kg
+        </span>
+        <span style={{ fontSize: 10, color: "#3b82f6", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 16, height: 1.5, background: "#3b82f6", verticalAlign: "middle" }} /> 85 kg
+        </span>
+        <span style={{ fontSize: 10, color: "#22c55e", display: "flex", alignItems: "center", gap: 4 }}>
+          <span style={{ display: "inline-block", width: 16, height: 1.5, background: "#22c55e", verticalAlign: "middle" }} /> {objectif} kg objectif
+        </span>
+      </div>
+      <div style={{ fontSize: 10, color: "#475569", textAlign: "center", marginTop: 6 }}>
+        👆 Clique sur un point pour voir la date complète
       </div>
     </div>
   );
