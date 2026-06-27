@@ -390,26 +390,51 @@ function MiniChart({ entries, color, objectif }) {
 }
 
 // ── GIST TOKEN MODAL ─────────────────────────────────────────────────────────
-function GistTokenModal({ onSave }) {
+function GistTokenModal({ onSave, onClose, currentToken }) {
   const [val, setVal] = useState("");
+  const [show, setShow] = useState(false);
   const [err, setErr] = useState(false);
+  const hasToken = currentToken && currentToken.startsWith("ghp_");
+
   return (
     <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
       <div style={{ background: "linear-gradient(160deg,#1e293b,#0f172a)", borderRadius: 20, border: "1px solid #a855f744", padding: 28, maxWidth: 420, width: "100%" }}>
-        <div style={{ fontSize: 10, letterSpacing: 3, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Configuration synchronisation</div>
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+          <div style={{ fontSize: 10, letterSpacing: 3, color: "#94a3b8", textTransform: "uppercase" }}>Synchronisation GitHub Gist</div>
+          {onClose && <button onClick={onClose} style={{ background: "none", border: "none", color: "#64748b", fontSize: 22, cursor: "pointer" }}>×</button>}
+        </div>
         <div style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", marginBottom: 12 }}>🔑 Token GitHub</div>
+
+        {hasToken && (
+          <div style={{ background: "#22c55e18", border: "1px solid #22c55e33", borderRadius: 10, padding: "10px 14px", marginBottom: 14, fontSize: 13, color: "#22c55e" }}>
+            ✅ Token configuré sur cet appareil
+          </div>
+        )}
+
         <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7, marginBottom: 16 }}>
-          Pour synchroniser tes données entre appareils, entre ton token GitHub.<br /><br />
-          Il sera stocké uniquement dans ce navigateur, jamais dans le code.
+          {hasToken ? "Tu peux mettre à jour ton token ci-dessous." : "Entre ton token GitHub pour synchroniser tes données entre appareils."}<br /><br />
+          Ton token GitHub commence par <code style={{ color: "#f97316", fontSize: 11 }}>ghp_...</code>
         </p>
-        <input type="password" value={val} onChange={e => { setVal(e.target.value); setErr(false); }}
-          placeholder="ghp_..."
-          style={{ width: "100%", padding: "12px 14px", background: "#ffffff0a", border: `1px solid ${err ? "#ef4444" : "#a855f744"}`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "monospace", outline: "none", marginBottom: 12 }} />
+
+        <div style={{ position: "relative", marginBottom: 12 }}>
+          <input
+            type={show ? "text" : "password"}
+            value={val}
+            onChange={e => { setVal(e.target.value); setErr(false); }}
+            placeholder="ghp_..."
+            style={{ width: "100%", padding: "12px 44px 12px 14px", background: "#ffffff0a", border: `1px solid ${err ? "#ef4444" : "#a855f744"}`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "monospace", outline: "none", boxSizing: "border-box" }}
+          />
+          <button onClick={() => setShow(s => !s)} style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", background: "none", border: "none", color: "#64748b", cursor: "pointer", fontSize: 16 }}>
+            {show ? "🙈" : "👁️"}
+          </button>
+        </div>
+
         {err && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 8 }}>Le token doit commencer par "ghp_"</div>}
+
         <button onClick={() => {
           if (val.trim().startsWith("ghp_")) { setGistToken(val.trim()); onSave(); }
           else setErr(true);
-        }} style={{ width: "100%", padding: 12, background: "#a855f7", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Georgia,serif" }}>
+        }} style={{ width: "100%", padding: 12, background: "#a855f7", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Georgia,serif", marginBottom: hasToken ? 0 : 0 }}>
           Enregistrer et synchroniser
         </button>
       </div>
@@ -1344,6 +1369,7 @@ function App() {
   const [splash, setSplash]     = useState(true);
   const [tab, setTab]           = useState("poids");
   const [data, setData]         = useState(null);
+  const [showTokenModal, setShowTokenModal] = useState(false);
   const [syncStatus, setSyncStatus] = useState("syncing"); // ok | syncing | error
   const [chatOpen, setChatOpen] = useState(false);
   const [showApiModal, setShowApiModal] = useState(false);
@@ -1463,8 +1489,16 @@ function App() {
       fontFamily: "Georgia,'Times New Roman',serif",
       color: "#e2e8f0", display: "flex", flexDirection: "column",
     }}>
-      {syncStatus === "no_token" && (
-        <GistTokenModal onSave={() => { setSyncStatus("syncing"); window._coachReload && window._coachReload(); }} />
+      {(syncStatus === "no_token" || showTokenModal) && (
+        <GistTokenModal
+          currentToken={typeof getGistToken === 'function' ? getGistToken() : ""}
+          onSave={() => {
+            setShowTokenModal(false);
+            setSyncStatus("syncing");
+            window._coachReload && window._coachReload();
+          }}
+          onClose={() => setShowTokenModal(false)}
+        />
       )}
       {showApiModal && (
         <ApiKeyModal onSave={() => setShowApiModal(false)} onSkip={() => setShowApiModal(false)} />
@@ -1484,11 +1518,17 @@ function App() {
             WebkitBackgroundClip: "text", WebkitTextFillColor: "transparent",
           }}>Mon espace de progression</h1>
         </div>
-        <button onClick={() => setChatOpen(o => !o)} style={{
-          background: activeTab.color, border: "none", borderRadius: 50,
-          width: 46, height: 46, fontSize: 20, cursor: "pointer",
-          boxShadow: `0 0 18px ${activeTab.color}66`,
-        }} title="Mon coach IA">🤖</button>
+        <div style={{ display: "flex", gap: 8 }}>
+          <button onClick={() => setShowTokenModal(true)} style={{
+            background: "#ffffff11", border: "1px solid #ffffff22", borderRadius: 50,
+            width: 36, height: 36, fontSize: 15, cursor: "pointer",
+          }} title="Configurer la synchronisation">⚙️</button>
+          <button onClick={() => setChatOpen(o => !o)} style={{
+            background: activeTab.color, border: "none", borderRadius: 50,
+            width: 46, height: 46, fontSize: 20, cursor: "pointer",
+            boxShadow: `0 0 18px ${activeTab.color}66`,
+          }} title="Mon coach IA">🤖</button>
+        </div>
       </header>
 
       <nav style={{ display: "flex", gap: 6, padding: "12px 20px 0" }}>
