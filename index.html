@@ -11,7 +11,6 @@
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react/18.2.0/umd/react.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/react-dom/18.2.0/umd/react-dom.production.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/babel-standalone/7.23.2/babel.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
   <style>
     *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
     html, body { height: 100%; background: #0f0c29; }
@@ -41,10 +40,34 @@
 <script type="text/babel">
 const { useState, useEffect, useRef, useCallback } = React;
 
-// ── SUPABASE CONFIG ───────────────────────────────────────────────────────────
-const SUPABASE_URL = "https://gtdteuwthdcdsqmuhyoi.supabase.co";
-const SUPABASE_KEY = "sb_publishable_R3-Ed3HmbwU64CIwdPr09Q_vmV9DLeO";
-const supabase = window.supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+// ── GITHUB GIST CONFIG ────────────────────────────────────────────────────────
+const GIST_ID    = "33fec409589d0b80f9787ab29548aa1b";
+const GIST_TOKEN = "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";
+const GIST_FILE  = "coach_data.json";
+
+async function gistLoad() {
+  const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    headers: { "Authorization": `token ${GIST_TOKEN}`, "Accept": "application/vnd.github.v3+json" }
+  });
+  if (!r.ok) throw new Error("Gist load failed");
+  const g = await r.json();
+  const content = g.files[GIST_FILE]?.content;
+  if (!content || content.trim() === "{}") return null;
+  return JSON.parse(content);
+}
+
+async function gistSave(data) {
+  const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
+    method: "PATCH",
+    headers: {
+      "Authorization": `token ${GIST_TOKEN}`,
+      "Accept": "application/vnd.github.v3+json",
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify({ files: { [GIST_FILE]: { content: JSON.stringify(data) } } })
+  });
+  if (!r.ok) throw new Error("Gist save failed");
+}
 
 // ── ANTHROPIC API KEY ─────────────────────────────────────────────────────────
 const API_KEY_STORAGE = "coach_api_key";
@@ -1295,49 +1318,36 @@ function App() {
     async function load() {
       setSyncStatus("syncing");
       try {
-        const { data: rows, error } = await supabase
-          .from("coach_data")
-          .select("*")
-          .eq("id", "main")
-          .single();
-
+        const saved = await gistLoad();
         const defaults = JSON.parse(JSON.stringify(HISTORICAL_DATA));
 
-        if (error || !rows) {
-          // Vraiment première fois : aucune donnée dans Supabase → initialiser
-          await supabase.from("coach_data").upsert({
-            id: "main",
-            procrastination: defaults.procrastination,
-            poids: defaults.poids,
-            chat_history: defaults.chatHistory,
-            updated_at: new Date().toISOString(),
+        if (!saved) {
+          // Première fois : Gist vide → pas d'initialisation avec les données historiques
+          setData({
+            procrastination: { tasks: [], streak: 0, lastDate: null, mantras: defaults.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
+            poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: { sucre: { current: 0, record: 0 }, grignotage: { current: 0, record: 0 }, alcool: { current: 0, record: 0 } }, journal: [], victoires: [], objectifLabel: "", bilan: "" },
+            chatHistory: [],
           });
-          setData(defaults);
         } else {
-          // Données existantes : NE JAMAIS écraser avec les defaults
-          // On ne complète que les clés manquantes (nouvelles fonctionnalités)
-          const p = rows.procrastination || {};
-          const w = rows.poids || {};
+          // Données existantes → charger telles quelles, compléter seulement les clés manquantes
+          const p = saved.procrastination || {};
+          const w = saved.poids || {};
           setData({
             procrastination: {
-              // Clés fixes (jamais écrasées par les defaults)
-              tasks:     p.tasks     !== undefined ? p.tasks     : [],
-              streak:    p.streak    !== undefined ? p.streak    : 0,
-              lastDate:  p.lastDate  !== undefined ? p.lastDate  : null,
-              // Clés avec fallback sur defaults si absentes (nouvelles features)
-              mantras:   p.mantras   || defaults.procrastination.mantras,
-              journal:   p.journal   || [],
-              victoires: p.victoires || [],
+              tasks:      p.tasks     !== undefined ? p.tasks     : [],
+              streak:     p.streak    !== undefined ? p.streak    : 0,
+              lastDate:   p.lastDate  !== undefined ? p.lastDate  : null,
+              mantras:    p.mantras   || defaults.procrastination.mantras,
+              journal:    p.journal   || [],
+              victoires:  p.victoires || [],
               weeklyGoal: p.weeklyGoal || "",
               weekBilan:  p.weekBilan  || "",
             },
             poids: {
-              // Clés fixes
-              entries:  w.entries  !== undefined ? w.entries  : [],
-              streak:   w.streak   !== undefined ? w.streak   : 0,
-              lastDate: w.lastDate  !== undefined ? w.lastDate : null,
-              objectif: w.objectif  !== undefined ? w.objectif : 80,
-              // Clés avec fallback si absentes
+              entries:      w.entries  !== undefined ? w.entries  : [],
+              streak:       w.streak   !== undefined ? w.streak   : 0,
+              lastDate:     w.lastDate !== undefined ? w.lastDate : null,
+              objectif:     w.objectif !== undefined ? w.objectif : 80,
               defis:        w.defis        || { sucre: { current: 0, record: 0 }, grignotage: { current: 0, record: 0 }, alcool: { current: 0, record: 0 } },
               journal:      w.journal      || [],
               victoires:    w.victoires    || [],
@@ -1345,13 +1355,12 @@ function App() {
               bilan:        w.bilan        || "",
               aikido:       w.aikido       || "",
             },
-            chatHistory: rows.chat_history || [],
+            chatHistory: saved.chatHistory || [],
           });
         }
         setSyncStatus("ok");
       } catch (e) {
         console.error(e);
-        // En cas d'erreur réseau : afficher vide plutôt que des données fictives
         setData({
           procrastination: { tasks: [], streak: 0, lastDate: null, mantras: HISTORICAL_DATA.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
           poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: {}, journal: [], victoires: [], objectifLabel: "", bilan: "" },
@@ -1370,12 +1379,10 @@ function App() {
     setSyncStatus("syncing");
     saveTimer.current = setTimeout(async () => {
       try {
-        await supabase.from("coach_data").upsert({
-          id: "main",
+        await gistSave({
           procrastination: data.procrastination,
           poids: data.poids,
-          chat_history: data.chatHistory,
-          updated_at: new Date().toISOString(),
+          chatHistory: data.chatHistory,
         });
         setSyncStatus("ok");
       } catch {
