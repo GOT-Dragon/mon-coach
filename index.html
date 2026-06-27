@@ -41,14 +41,20 @@
 const { useState, useEffect, useRef, useCallback } = React;
 
 // ── GITHUB GIST CONFIG ────────────────────────────────────────────────────────
-const GIST_ID    = "33fec409589d0b80f9787ab29548aa1b";
-const GIST_TOKEN = "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";
-const GIST_FILE  = "coach_data.json";
+const GIST_ID   = "33fec409589d0b80f9787ab29548aa1b";
+const GIST_FILE = "coach_data.json";
+
+// Token stocké dans localStorage — jamais dans le code source
+function getGistToken() { return localStorage.getItem("coach_gist_token") || ""; }
+function setGistToken(t) { localStorage.setItem("coach_gist_token", t); }
 
 async function gistLoad() {
+  const token = getGistToken();
+  if (!token) throw new Error("NO_TOKEN");
   const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
-    headers: { "Authorization": `token ${GIST_TOKEN}`, "Accept": "application/vnd.github.v3+json" }
+    headers: { "Authorization": `token ${token}`, "Accept": "application/vnd.github.v3+json" }
   });
+  if (r.status === 401) throw new Error("BAD_TOKEN");
   if (!r.ok) throw new Error("Gist load failed");
   const g = await r.json();
   const content = g.files[GIST_FILE]?.content;
@@ -57,10 +63,12 @@ async function gistLoad() {
 }
 
 async function gistSave(data) {
+  const token = getGistToken();
+  if (!token) return;
   const r = await fetch(`https://api.github.com/gists/${GIST_ID}`, {
     method: "PATCH",
     headers: {
-      "Authorization": `token ${GIST_TOKEN}`,
+      "Authorization": `token ${token}`,
       "Accept": "application/vnd.github.v3+json",
       "Content-Type": "application/json",
     },
@@ -376,6 +384,34 @@ function MiniChart({ entries, color, objectif }) {
       </div>
       <div style={{ fontSize: 10, color: "#475569", textAlign: "center", marginTop: 6 }}>
         👆 Clique sur un point pour voir la date complète
+      </div>
+    </div>
+  );
+}
+
+// ── GIST TOKEN MODAL ─────────────────────────────────────────────────────────
+function GistTokenModal({ onSave }) {
+  const [val, setVal] = useState("");
+  const [err, setErr] = useState(false);
+  return (
+    <div style={{ position: "fixed", inset: 0, background: "#000000cc", zIndex: 999, display: "flex", alignItems: "center", justifyContent: "center", padding: 20 }}>
+      <div style={{ background: "linear-gradient(160deg,#1e293b,#0f172a)", borderRadius: 20, border: "1px solid #a855f744", padding: 28, maxWidth: 420, width: "100%" }}>
+        <div style={{ fontSize: 10, letterSpacing: 3, color: "#94a3b8", textTransform: "uppercase", marginBottom: 8 }}>Configuration synchronisation</div>
+        <div style={{ fontSize: 20, fontWeight: 700, color: "#e2e8f0", marginBottom: 12 }}>🔑 Token GitHub</div>
+        <p style={{ fontSize: 13, color: "#94a3b8", lineHeight: 1.7, marginBottom: 16 }}>
+          Pour synchroniser tes données entre appareils, entre ton token GitHub.<br /><br />
+          Il sera stocké uniquement dans ce navigateur, jamais dans le code.
+        </p>
+        <input type="password" value={val} onChange={e => { setVal(e.target.value); setErr(false); }}
+          placeholder="ghp_..."
+          style={{ width: "100%", padding: "12px 14px", background: "#ffffff0a", border: `1px solid ${err ? "#ef4444" : "#a855f744"}`, borderRadius: 10, color: "#e2e8f0", fontSize: 13, fontFamily: "monospace", outline: "none", marginBottom: 12 }} />
+        {err && <div style={{ fontSize: 12, color: "#ef4444", marginBottom: 8 }}>Le token doit commencer par "ghp_"</div>}
+        <button onClick={() => {
+          if (val.trim().startsWith("ghp_")) { setGistToken(val.trim()); onSave(); }
+          else setErr(true);
+        }} style={{ width: "100%", padding: 12, background: "#a855f7", border: "none", borderRadius: 10, color: "#fff", fontSize: 14, fontWeight: 700, cursor: "pointer", fontFamily: "Georgia,serif" }}>
+          Enregistrer et synchroniser
+        </button>
       </div>
     </div>
   );
@@ -1361,15 +1397,26 @@ function App() {
         setSyncStatus("ok");
       } catch (e) {
         console.error(e);
-        setData({
-          procrastination: { tasks: [], streak: 0, lastDate: null, mantras: HISTORICAL_DATA.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
-          poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: {}, journal: [], victoires: [], objectifLabel: "", bilan: "" },
-          chatHistory: [],
-        });
-        setSyncStatus("error");
+        if (e.message === "NO_TOKEN" || e.message === "BAD_TOKEN") {
+          setSyncStatus("no_token");
+          setData({
+            procrastination: { tasks: [], streak: 0, lastDate: null, mantras: HISTORICAL_DATA.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
+            poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: {}, journal: [], victoires: [], objectifLabel: "", bilan: "" },
+            chatHistory: [],
+          });
+        } else {
+          setData({
+            procrastination: { tasks: [], streak: 0, lastDate: null, mantras: HISTORICAL_DATA.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
+            poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: {}, journal: [], victoires: [], objectifLabel: "", bilan: "" },
+            chatHistory: [],
+          });
+          setSyncStatus("error");
+        }
       }
     }
     load();
+    // Exposer pour la modal token
+    window._coachReload = load;
   }, []);
 
   // Save to Supabase with debounce (1.5s)
@@ -1406,8 +1453,8 @@ function App() {
   }
 
   const activeTab = TABS.find(t => t.id === tab);
-  const syncColors = { ok: "#22c55e", syncing: "#f97316", error: "#ef4444" };
-  const syncLabels = { ok: "Synchronisé", syncing: "Sync…", error: "Hors ligne" };
+  const syncColors = { ok: "#22c55e", syncing: "#f97316", error: "#ef4444", no_token: "#a855f7" };
+  const syncLabels = { ok: "Synchronisé", syncing: "Sync…", error: "Hors ligne", no_token: "⚙️ Config requise" };
 
   return (
     <div style={{
@@ -1416,6 +1463,9 @@ function App() {
       fontFamily: "Georgia,'Times New Roman',serif",
       color: "#e2e8f0", display: "flex", flexDirection: "column",
     }}>
+      {syncStatus === "no_token" && (
+        <GistTokenModal onSave={() => { setSyncStatus("syncing"); window._coachReload && window._coachReload(); }} />
+      )}
       {showApiModal && (
         <ApiKeyModal onSave={() => setShowApiModal(false)} onSkip={() => setShowApiModal(false)} />
       )}
