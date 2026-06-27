@@ -1302,31 +1302,61 @@ function App() {
           .single();
 
         const defaults = JSON.parse(JSON.stringify(HISTORICAL_DATA));
+
         if (error || !rows) {
-          // First time: push historical data
+          // Vraiment première fois : aucune donnée dans Supabase → initialiser
           await supabase.from("coach_data").upsert({
             id: "main",
             procrastination: defaults.procrastination,
-            anglais: defaults.anglais,
             poids: defaults.poids,
             chat_history: defaults.chatHistory,
             updated_at: new Date().toISOString(),
           });
           setData(defaults);
         } else {
-          // Merge with defaults to ensure all keys exist
+          // Données existantes : NE JAMAIS écraser avec les defaults
+          // On ne complète que les clés manquantes (nouvelles fonctionnalités)
           const p = rows.procrastination || {};
           const w = rows.poids || {};
           setData({
-            procrastination: { ...defaults.procrastination, ...p, tasks: p.tasks || defaults.procrastination.tasks, mantras: p.mantras || defaults.procrastination.mantras, journal: p.journal || [], victoires: p.victoires || [] },
-            poids: { ...defaults.poids, ...w, entries: w.entries || defaults.poids.entries, defis: w.defis || defaults.poids.defis, journal: w.journal || [], victoires: w.victoires || [], objectifLabel: w.objectifLabel || defaults.poids.objectifLabel, bilan: w.bilan || '' },
+            procrastination: {
+              // Clés fixes (jamais écrasées par les defaults)
+              tasks:     p.tasks     !== undefined ? p.tasks     : [],
+              streak:    p.streak    !== undefined ? p.streak    : 0,
+              lastDate:  p.lastDate  !== undefined ? p.lastDate  : null,
+              // Clés avec fallback sur defaults si absentes (nouvelles features)
+              mantras:   p.mantras   || defaults.procrastination.mantras,
+              journal:   p.journal   || [],
+              victoires: p.victoires || [],
+              weeklyGoal: p.weeklyGoal || "",
+              weekBilan:  p.weekBilan  || "",
+            },
+            poids: {
+              // Clés fixes
+              entries:  w.entries  !== undefined ? w.entries  : [],
+              streak:   w.streak   !== undefined ? w.streak   : 0,
+              lastDate: w.lastDate  !== undefined ? w.lastDate : null,
+              objectif: w.objectif  !== undefined ? w.objectif : 80,
+              // Clés avec fallback si absentes
+              defis:        w.defis        || { sucre: { current: 0, record: 0 }, grignotage: { current: 0, record: 0 }, alcool: { current: 0, record: 0 } },
+              journal:      w.journal      || [],
+              victoires:    w.victoires    || [],
+              objectifLabel: w.objectifLabel || "",
+              bilan:        w.bilan        || "",
+              aikido:       w.aikido       || "",
+            },
             chatHistory: rows.chat_history || [],
           });
         }
         setSyncStatus("ok");
       } catch (e) {
         console.error(e);
-        setData(JSON.parse(JSON.stringify(HISTORICAL_DATA)));
+        // En cas d'erreur réseau : afficher vide plutôt que des données fictives
+        setData({
+          procrastination: { tasks: [], streak: 0, lastDate: null, mantras: HISTORICAL_DATA.procrastination.mantras, journal: [], victoires: [], weeklyGoal: "", weekBilan: "" },
+          poids: { entries: [], streak: 0, lastDate: null, objectif: 80, defis: {}, journal: [], victoires: [], objectifLabel: "", bilan: "" },
+          chatHistory: [],
+        });
         setSyncStatus("error");
       }
     }
